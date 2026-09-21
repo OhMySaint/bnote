@@ -19,6 +19,14 @@ final class Note {
     var marginLeft: Double = 72
     var marginRight: Double = 72
 
+    // Cover & header
+    @Attribute(.externalStorage) var coverData: Data?
+    var coverStyle: String = ""
+    var coverHeight: Double = 180
+    var headerAlignmentRaw: String = HeaderAlignment.leading.rawValue
+    var subtitle: String = ""
+    var showIcon: Bool = true
+
     var parent: Note?
     @Relationship(deleteRule: .cascade, inverse: \Note.parent)
     var children: [Note]? = []
@@ -53,6 +61,28 @@ final class Note {
             marginLeft = newValue.margins.left
             marginRight = newValue.margins.right
         }
+    }
+
+    var headerAlignment: HeaderAlignment {
+        get { HeaderAlignment(rawValue: headerAlignmentRaw) ?? .leading }
+        set { headerAlignmentRaw = newValue.rawValue }
+    }
+
+    var hasCover: Bool { coverData != nil || !coverStyle.isEmpty }
+
+    /// Every page below this one, depth first.
+    var descendants: [Note] {
+        sortedChildren.flatMap { [$0] + $0.descendants }
+    }
+
+    var depth: Int {
+        var level = 0
+        var current = parent
+        while let node = current {
+            level += 1
+            current = node.parent
+        }
+        return level
     }
 
     var sortedChildren: [Note] {

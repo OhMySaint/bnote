@@ -103,13 +103,20 @@ struct PageSetupPanel: View {
                 }
 
                 section("Thu phóng") {
+                    Toggle("Vừa chiều rộng cửa sổ", isOn: Binding(
+                        get: { controller.canvasOptions.fitWidth },
+                        set: { on in
+                            if on { controller.zoomToFitWidth() } else { controller.setZoom(controller.effectiveZoom) }
+                        }
+                    ))
                     HStack {
-                        Slider(value: zoomBinding, in: 0.5...2.0)
-                        Text("\(Int(controller.canvasOptions.zoom * 100))%")
+                        Slider(value: zoomBinding, in: 0.5...2.5)
+                            .disabled(controller.canvasOptions.fitWidth)
+                        Text("\(Int((controller.effectiveZoom * 100).rounded()))%")
                             .font(.caption.monospacedDigit())
                             .frame(width: 40, alignment: .trailing)
                     }
-                    Button("Về 100%") { controller.canvasOptions.zoom = 1 }
+                    Button("Về 100%") { controller.setZoom(1) }
                         .buttonStyle(.link)
                 }
             }
@@ -254,8 +261,8 @@ struct PageSetupPanel: View {
 
     private var zoomBinding: Binding<Double> {
         Binding(
-            get: { controller.canvasOptions.zoom },
-            set: { controller.canvasOptions.zoom = $0 }
+            get: { controller.canvasOptions.fitWidth ? controller.effectiveZoom : controller.canvasOptions.zoom },
+            set: { controller.setZoom($0) }
         )
     }
 

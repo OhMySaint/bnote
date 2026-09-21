@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: [SortDescriptor(\Note.sortIndex), SortDescriptor(\Note.createdAt)])
     private var notes: [Note]
+    @Query(sort: \Tag.name) private var tags: [Tag]
 
     @StateObject private var controller = DocumentController.shared
     @State private var selection: PersistentIdentifier?
@@ -16,32 +17,40 @@ struct ContentView: View {
     @State private var inspectorBeforeFocus = true
     @State private var pendingDeletion: Note?
     @State private var errorMessage: String?
+    @State private var showTagManager = false
+    @State private var renamingID: PersistentIdentifier?
 
     private var roots: [Note] {
         notes.filter { $0.parent == nil && passes($0) }
-    }
-
-    private var allTags: [String] {
-        var seen = Set<String>()
-        return notes.flatMap(\.tags).filter { seen.insert($0.lowercased()).inserted }.sorted()
     }
 
     private var selectedNote: Note? {
         notes.first { $0.persistentModelID == selection }
     }
 
+    private var pageActions: PageActions {
+        PageActions(
+            add: { parent in addPage(parent: parent) },
+            delete: { note in requestDelete(note) },
+            duplicate: { note in duplicate(note) },
+            move: { note, target in move(note, under: target) },
+            rename: { note in renamingID = note.persistentModelID }
+        )
+    }
+
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(
                 roots: roots,
-                allTags: allTags,
-                totalPages: notes.count,
+                allNotes: notes,
+                tags: tags,
                 selection: $selection,
                 search: $search,
                 activeTag: $activeTag,
-                onAddPage: { parent in addPage(parent: parent) },
-                onDelete: { note in requestDelete(note) },
-                onDuplicate: { note in duplicate(note) }
+                renamingID: $renamingID,
+                actions: pageActions,
+                onManageTags: { showTagManager = true },
+                onShowDashboard: { selection = nil }
             )
             .toolbar {
                 ToolbarItem {
@@ -62,22 +71,22 @@ struct ContentView: View {
                     inspectorTab: $inspectorTab
                 )
             } else {
-                ContentUnavailableView {
-                    Label("Chưa chọn trang", systemImage: "doc.text")
-                } description: {
-                    Text("Chọn một trang bên trái, hoặc tạo trang mới để bắt đầu viết.")
-                } actions: {
-                    Button("Trang mới") { addPage(parent: nil) }
-                        .buttonStyle(.borderedProminent)
-                }
+                DashboardView(
+                    notes: notes,
+                    tags: tags,
+                    actions: pageActions,
+                    onOpen: { note in selection = note.persistentModelID },
+                    onManageTags: { showTagManager = true }
+                )
             }
         }
-        .navigationTitle(selectedNote?.displayTitle ?? "BNote")
+        .navigationTitle(selectedNote?.displayTitle ?? "Tổng quan")
         .onChange(of: selection) { _, _ in activate(selectedNote) }
         .onChange(of: controller.config) { _, config in
             selectedNote?.pageConfig = config
         }
         .onAppear(perform: wireCommands)
+        .sheet(isPresented: $showTagManager) { TagManagerView() }
         .confirmationDialog(
             "Xóa “\(pendingDeletion?.displayTitle ?? "")”?",
             isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } })
@@ -106,7 +115,7 @@ struct ContentView: View {
     }
 
     private func hasTag(_ note: Note, tag: String) -> Bool {
-        if note.tags.contains(where: { $0.caseInsensitiveCompare(tag) == .orderedSame }) { return true }
+        if note.tags.contains(where: { Tag.key(for: $0) == Tag.key(for: tag) }) { return true }
         return note.sortedChildren.contains { hasTag($0, tag: tag) }
     }
 
@@ -169,9 +178,28 @@ struct ContentView: View {
         copy.tags = note.tags
         copy.icon = note.icon
         copy.pageConfig = note.pageConfig
+        copy.coverData = note.coverData
+        copy.coverStyle = note.coverStyle
+        copy.coverHeight = note.coverHeight
+        copy.headerAlignmentRaw = note.headerAlignmentRaw
+        copy.subtitle = note.subtitle
+        copy.showIcon = note.showIcon
         context.insert(copy)
         try? context.save()
         selection = copy.persistentModelID
+    }
+
+    private func move(_ note: Note, under target: Note?) {
+        // Never move a page into its own subtree.
+        if let target, ([note] + note.descendants).contains(where: { $0.persistentModelID == target.persistentModelID }) {
+            return
+        }
+        let siblings = target?.sortedChildren ?? notes.filter { $0.parent == nil }
+        note.parent = target
+        note.sortIndex = (siblings.map(\.sortIndex).max() ?? 0) + 1
+        target?.isExpanded = true
+        note.touch()
+        try? context.save()
     }
 
     // MARK: - Import / export
@@ -223,6 +251,8 @@ struct ContentView: View {
             inspectorTab = .page
             showInspector = true
         }
+        actions.showDashboard = { selection = nil }
+        actions.manageTags = { showTagManager = true }
         actions.toggleFocusMode = {
             withAnimation(.easeInOut(duration: 0.2)) {
                 if columnVisibility == .detailOnly {
@@ -244,5 +274,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: Note.self, inMemory: true)
+        .modelContainer(for: [Note.self, Tag.self], inMemory: true)
 }

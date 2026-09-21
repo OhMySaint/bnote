@@ -32,6 +32,8 @@ final class DocumentController: NSObject, ObservableObject {
     @Published private(set) var wordCount = 0
     @Published private(set) var characterCount = 0
     @Published private(set) var hasUnsavedChanges = false
+    /// Scale actually applied to the canvas (fit mode computes it from the window).
+    @Published private(set) var effectiveZoom: CGFloat = 1
     @Published var format = FormatState()
     @Published var config = PageConfig() {
         didSet {
@@ -685,6 +687,22 @@ final class DocumentController: NSObject, ObservableObject {
 
     func notePageCountChanged() {
         pageCount = documentView?.pageCount ?? 1
+    }
+
+    func reportEffectiveZoom(_ zoom: CGFloat) {
+        let rounded = (zoom * 100).rounded() / 100
+        if effectiveZoom != rounded {
+            DispatchQueue.main.async { self.effectiveZoom = rounded }
+        }
+    }
+
+    func setZoom(_ zoom: CGFloat) {
+        canvasOptions.fitWidth = false
+        canvasOptions.zoom = min(max(zoom, 0.5), 3.0)
+    }
+
+    func zoomToFitWidth() {
+        canvasOptions.fitWidth = true
     }
 }
 

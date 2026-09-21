@@ -1,0 +1,305 @@
+import SwiftData
+import SwiftUI
+
+/// Master screen: every page at a glance, with search, sort, tag filter,
+/// and the same actions as the sidebar.
+struct DashboardView: View {
+    let notes: [Note]
+    let tags: [Tag]
+    let actions: PageActions
+    var onOpen: (Note) -> Void
+    var onManageTags: () -> Void
+
+    @State private var query = ""
+    @State private var sort = SortMode.updated
+    @State private var tagFilter: String?
+    @State private var layout = Layout.grid
+    @State private var onlyRoots = false
+
+    enum SortMode: String, CaseIterable, Identifiable {
+        case updated, created, title
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .updated: "Sửa gần đây"
+            case .created: "Mới tạo"
+            case .title: "Tên A–Z"
+            }
+        }
+    }
+
+    enum Layout: String, CaseIterable, Identifiable {
+        case grid, list
+        var id: String { rawValue }
+        var symbol: String { self == .grid ? "square.grid.2x2" : "list.bullet" }
+    }
+
+    private var visible: [Note] {
+        var result = notes
+        if onlyRoots { result = result.filter { $0.parent == nil } }
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        if !needle.isEmpty {
+            result = result.filter {
+                $0.title.lowercased().contains(needle)
+                    || $0.content.lowercased().contains(needle)
+                    || $0.tags.contains { $0.lowercased().contains(needle) }
+            }
+        }
+        if let tagFilter {
+            let key = Tag.key(for: tagFilter)
+            result = result.filter { $0.tags.contains { Tag.key(for: $0) == key } }
+        }
+        switch sort {
+        case .updated: result.sort { $0.updatedAt > $1.updatedAt }
+        case .created: result.sort { $0.createdAt > $1.createdAt }
+        case .title: result.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
+        }
+        return result
+    }
+
+    private var usedTags: [String] {
+        var seen = Set<String>()
+        return notes.flatMap(\.tags).filter { seen.insert(Tag.key(for: $0)).inserted }.sorted()
+    }
+
+    private var totalWords: Int {
+        notes.reduce(0) { $0 + $1.content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            if visible.isEmpty {
+                ContentUnavailableView {
+                    Label(notes.isEmpty ? "Chưa có trang" : "Không có trang phù hợp", systemImage: "square.grid.2x2")
+                } description: {
+                    Text(notes.isEmpty ? "Tạo trang đầu tiên để bắt đầu." : "Thử đổi từ khóa hoặc bỏ lọc thẻ.")
+                } actions: {
+                    if notes.isEmpty {
+                        Button("Trang mới") { actions.add(nil) }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+            } else {
+                ScrollView {
+                    switch layout {
+                    case .grid:
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 14)], spacing: 14) {
+                            ForEach(visible) { note in
+                                PageCard(note: note, tags: tags)
+                                    .onTapGesture { onOpen(note) }
+                                    .contextMenu { PageContextMenu(note: note, allNotes: notes, actions: actions) }
+                            }
+                        }
+                        .padding(18)
+                    case .list:
+                        LazyVStack(spacing: 0) {
+                            ForEach(visible) { note in
+                                PageListRow(note: note, tags: tags)
+                                    .contentShape(.rect)
+                                    .onTapGesture { onOpen(note) }
+                                    .contextMenu { PageContextMenu(note: note, allNotes: notes, actions: actions) }
+                                Divider()
+                            }
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                    }
+                }
+            }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Tổng quan")
+                    .font(.largeTitle.weight(.bold))
+                Spacer()
+                Button {
+                    actions.add(nil)
+                } label: {
+                    Label("Trang mới", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            HStack(spacing: 18) {
+                stat("\(notes.count)", "trang")
+                stat("\(notes.filter { $0.parent == nil }.count)", "trang gốc")
+                stat("\(totalWords)", "từ")
+                stat("\(usedTags.count)", "thẻ")
+            }
+
+            HStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Tìm trang…", text: $query)
+                        .textFieldStyle(.plain)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 7))
+                .frame(maxWidth: 280)
+
+                Picker("", selection: $sort) {
+                    ForEach(SortMode.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden()
+                .fixedSize()
+
+                Toggle("Chỉ trang gốc", isOn: $onlyRoots)
+                    .toggleStyle(.checkbox)
+
+                Spacer()
+
+                Picker("", selection: $layout) {
+                    ForEach(Layout.allCases) { Image(systemName: $0.symbol).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+
+            if !usedTags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        filterChip("Tất cả", selected: tagFilter == nil) { tagFilter = nil }
+                        ForEach(usedTags, id: \.self) { tag in
+                            let selected = tagFilter.map { Tag.key(for: $0) == Tag.key(for: tag) } ?? false
+                            filterChip(tag, color: tags.color(for: tag), selected: selected) {
+                                tagFilter = selected ? nil : tag
+                            }
+                        }
+                        Button(action: onManageTags) {
+                            Label("Quản lý thẻ", systemImage: "slider.horizontal.3")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .padding(.leading, 6)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        HStack(spacing: 4) {
+            Text(value).font(.title3.weight(.semibold)).monospacedDigit()
+            Text(label).foregroundStyle(.secondary)
+        }
+    }
+
+    private func filterChip(_ text: String, color: TagColor? = nil, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let color {
+                    Circle().fill(color.color).frame(width: 6, height: 6)
+                }
+                Text(text)
+            }
+            .font(.caption)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(selected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.05), in: .capsule)
+            .overlay(Capsule().stroke(selected ? Color.accentColor : .clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct PageCard: View {
+    let note: Note
+    let tags: [Tag]
+    @State private var hovering = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
+                if note.hasCover {
+                    CoverView(note: note)
+                        .frame(height: 92)
+                        .clipped()
+                } else {
+                    Color.primary.opacity(0.05)
+                        .frame(height: 92)
+                }
+                Text(note.icon)
+                    .font(.system(size: 26))
+                    .padding(8)
+                    .background(.regularMaterial, in: .rect(cornerRadius: 8))
+                    .padding(8)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(note.displayTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(note.snippet.isEmpty ? "Trang trống" : note.snippet)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !note.tags.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(note.tags.prefix(3), id: \.self) { tag in
+                            TagChip(name: tag, color: tags.color(for: tag), compact: true)
+                        }
+                    }
+                }
+                HStack {
+                    Text(note.updatedAt.formatted(.relative(presentation: .named)))
+                    Spacer()
+                    if !note.sortedChildren.isEmpty {
+                        Label("\(note.sortedChildren.count)", systemImage: "doc.on.doc")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            }
+            .padding(10)
+        }
+        .background(.background, in: .rect(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(hovering ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.08)))
+        .shadow(color: .black.opacity(hovering ? 0.12 : 0.05), radius: hovering ? 8 : 3, y: 2)
+        .scaleEffect(hovering ? 1.01 : 1)
+        .animation(.easeOut(duration: 0.12), value: hovering)
+        .onHover { hovering = $0 }
+    }
+}
+
+private struct PageListRow: View {
+    let note: Note
+    let tags: [Tag]
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(note.icon).font(.title3)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if note.depth > 0 {
+                        Text(String(repeating: "› ", count: note.depth))
+                            .foregroundStyle(.tertiary)
+                    }
+                    Text(note.displayTitle).font(.body.weight(.medium))
+                }
+                Text(note.snippet.isEmpty ? "Trang trống" : note.snippet)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            ForEach(note.tags.prefix(3), id: \.self) { tag in
+                TagChip(name: tag, color: tags.color(for: tag), compact: true)
+            }
+            Text(note.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .frame(width: 130, alignment: .trailing)
+        }
+        .padding(.vertical, 8)
+    }
+}

@@ -1,50 +1,87 @@
 import SwiftData
 import SwiftUI
 
+/// Everything the sidebar can do to a page; the dashboard reuses the same set.
+struct PageActions {
+    var add: (Note?) -> Void
+    var delete: (Note) -> Void
+    var duplicate: (Note) -> Void
+    var move: (Note, Note?) -> Void
+    var rename: (Note) -> Void
+}
+
 /// Nested page tree, the way Notion organises documents.
 struct SidebarView: View {
     let roots: [Note]
-    let allTags: [String]
-    let totalPages: Int
+    let allNotes: [Note]
+    let tags: [Tag]
     @Binding var selection: PersistentIdentifier?
     @Binding var search: String
     @Binding var activeTag: String?
+    @Binding var renamingID: PersistentIdentifier?
+    let actions: PageActions
+    var onManageTags: () -> Void
+    var onShowDashboard: () -> Void
 
-    var onAddPage: (Note?) -> Void
-    var onDelete: (Note) -> Void
-    var onDuplicate: (Note) -> Void
+    private var usedTagNames: [String] {
+        var seen = Set<String>()
+        return allNotes.flatMap(\.tags).filter { seen.insert(Tag.key(for: $0)).inserted }.sorted()
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             List(selection: $selection) {
+                Section {
+                    Button {
+                        onShowDashboard()
+                    } label: {
+                        Label("Tổng quan", systemImage: "square.grid.2x2")
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Section("Trang") {
                     ForEach(roots) { note in
                         PageRow(
                             note: note,
-                            onAddPage: onAddPage,
-                            onDelete: onDelete,
-                            onDuplicate: onDuplicate
+                            allNotes: allNotes,
+                            tags: tags,
+                            renamingID: $renamingID,
+                            actions: actions
                         )
                     }
                 }
 
-                if !allTags.isEmpty {
-                    Section("Thẻ") {
-                        ForEach(allTags, id: \.self) { tag in
+                if !usedTagNames.isEmpty {
+                    Section {
+                        ForEach(usedTagNames, id: \.self) { name in
+                            let isActive = activeTag.map { Tag.key(for: $0) == Tag.key(for: name) } ?? false
                             HStack(spacing: 6) {
-                                Image(systemName: activeTag == tag ? "tag.fill" : "tag")
-                                Text(tag)
+                                Circle()
+                                    .fill(tags.color(for: name).color)
+                                    .frame(width: 8, height: 8)
+                                Text(name)
                                 Spacer()
-                                if activeTag == tag {
+                                if isActive {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.tertiary)
                                 }
                             }
-                            .foregroundStyle(activeTag == tag ? Color.accentColor : .primary)
+                            .foregroundStyle(isActive ? Color.accentColor : .primary)
                             .contentShape(.rect)
                             .onTapGesture {
-                                activeTag = activeTag == tag ? nil : tag
+                                activeTag = isActive ? nil : name
                             }
+                        }
+                    } header: {
+                        HStack {
+                            Text("Thẻ")
+                            Spacer()
+                            Button(action: onManageTags) {
+                                Image(systemName: "slider.horizontal.3")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Quản lý thẻ (⇧⌘T)")
                         }
                     }
                 }
@@ -57,7 +94,7 @@ struct SidebarView: View {
                         } description: {
                             Text("Mỗi trang là một tài liệu, có thể lồng trang con bên trong.")
                         } actions: {
-                            Button("Tạo trang đầu tiên") { onAddPage(nil) }
+                            Button("Tạo trang đầu tiên") { actions.add(nil) }
                                 .buttonStyle(.borderedProminent)
                         }
                     } else {
@@ -76,7 +113,7 @@ struct SidebarView: View {
     private var footer: some View {
         HStack {
             Button {
-                onAddPage(nil)
+                actions.add(nil)
             } label: {
                 Label("Trang mới", systemImage: "plus")
                     .font(.callout)
@@ -84,7 +121,7 @@ struct SidebarView: View {
             .buttonStyle(.borderless)
             .help("Trang mới (⌘N)")
             Spacer()
-            Text("\(totalPages) trang")
+            Text("\(allNotes.count) trang")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -93,13 +130,67 @@ struct SidebarView: View {
     }
 }
 
+/// Context menu shared by sidebar rows and dashboard cards.
+struct PageContextMenu: View {
+    let note: Note
+    let allNotes: [Note]
+    let actions: PageActions
+
+    private static let icons = ["📄", "📝", "📘", "🗒️", "📊", "🧩", "🚀", "💡", "🗓️", "✅", "🔖", "🧪", "🎯", "📚", "🧠", "⭐️"]
+
+    /// Pages this one can be moved under: everything except itself and its subtree.
+    private var moveTargets: [Note] {
+        let excluded = Set(([note] + note.descendants).map(\.persistentModelID))
+        return allNotes
+            .filter { !excluded.contains($0.persistentModelID) }
+            .sorted { ($0.depth, $0.sortIndex, $0.createdAt) < ($1.depth, $1.sortIndex, $1.createdAt) }
+    }
+
+    var body: some View {
+        Button("Đổi tên") { actions.rename(note) }
+        Button("Thêm trang con") { actions.add(note) }
+        Button("Nhân bản") { actions.duplicate(note) }
+
+        Menu("Biểu tượng") {
+            ForEach(Self.icons, id: \.self) { icon in
+                Button(icon) {
+                    note.icon = icon
+                    note.touch()
+                }
+            }
+        }
+
+        Menu("Di chuyển tới") {
+            Button("Cấp gốc") { actions.move(note, nil) }
+                .disabled(note.parent == nil)
+            Divider()
+            ForEach(moveTargets) { target in
+                Button {
+                    actions.move(note, target)
+                } label: {
+                    Text(String(repeating: "    ", count: target.depth) + "\(target.icon) \(target.displayTitle)")
+                }
+                .disabled(target.persistentModelID == note.parent?.persistentModelID)
+            }
+        }
+
+        Divider()
+        Button("Xóa", role: .destructive) { actions.delete(note) }
+    }
+}
+
 private struct PageRow: View {
     let note: Note
-    var onAddPage: (Note?) -> Void
-    var onDelete: (Note) -> Void
-    var onDuplicate: (Note) -> Void
+    let allNotes: [Note]
+    let tags: [Tag]
+    @Binding var renamingID: PersistentIdentifier?
+    let actions: PageActions
 
     @State private var hovering = false
+    @State private var draft = ""
+    @FocusState private var renameFocused: Bool
+
+    private var isRenaming: Bool { renamingID == note.persistentModelID }
 
     var body: some View {
         Group {
@@ -108,7 +199,7 @@ private struct PageRow: View {
             } else {
                 DisclosureGroup(isExpanded: expansion) {
                     ForEach(note.sortedChildren) { child in
-                        PageRow(note: child, onAddPage: onAddPage, onDelete: onDelete, onDuplicate: onDuplicate)
+                        PageRow(note: child, allNotes: allNotes, tags: tags, renamingID: $renamingID, actions: actions)
                     }
                 } label: {
                     label
@@ -117,10 +208,13 @@ private struct PageRow: View {
         }
         .tag(note.persistentModelID)
         .contextMenu {
-            Button("Thêm trang con") { onAddPage(note) }
-            Button("Nhân bản") { onDuplicate(note) }
-            Divider()
-            Button("Xóa", role: .destructive) { onDelete(note) }
+            PageContextMenu(note: note, allNotes: allNotes, actions: actions)
+        }
+        .onChange(of: isRenaming) { _, renaming in
+            if renaming {
+                draft = note.title
+                renameFocused = true
+            }
         }
     }
 
@@ -128,35 +222,61 @@ private struct PageRow: View {
         Binding(get: { note.isExpanded }, set: { note.isExpanded = $0 })
     }
 
+    @ViewBuilder
     private var label: some View {
-        HStack(spacing: 7) {
-            Text(note.icon)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(note.displayTitle)
-                    .lineLimit(1)
-                if !note.tags.isEmpty {
-                    Text(note.tags.map { "#\($0)" }.joined(separator: " "))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+        if isRenaming {
+            HStack(spacing: 7) {
+                Text(note.icon)
+                TextField("Tên trang", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($renameFocused)
+                    .onSubmit(commitRename)
+                    .onExitCommand { renamingID = nil }
+            }
+        } else {
+            HStack(spacing: 7) {
+                Text(note.icon)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(note.displayTitle)
                         .lineLimit(1)
+                    if !note.tags.isEmpty {
+                        HStack(spacing: 3) {
+                            ForEach(note.tags.prefix(3), id: \.self) { tag in
+                                Circle()
+                                    .fill(tags.color(for: tag).color)
+                                    .frame(width: 6, height: 6)
+                            }
+                            Text(note.tags.joined(separator: " · "))
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                Spacer(minLength: 4)
+                if hovering {
+                    Button {
+                        actions.add(note)
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 10, weight: .semibold))
+                            .frame(width: 18, height: 18)
+                            .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 4))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Thêm trang con")
                 }
             }
-            Spacer(minLength: 4)
-            if hovering {
-                Button {
-                    onAddPage(note)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .semibold))
-                        .frame(width: 18, height: 18)
-                        .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 4))
-                }
-                .buttonStyle(.plain)
-                .help("Thêm trang con")
-            }
+            .padding(.vertical, 1)
+            .contentShape(.rect)
+            .onHover { hovering = $0 }
+            .simultaneousGesture(TapGesture(count: 2).onEnded { renamingID = note.persistentModelID })
         }
-        .padding(.vertical, 1)
-        .contentShape(.rect)
-        .onHover { hovering = $0 }
+    }
+
+    private func commitRename() {
+        note.title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        note.touch()
+        renamingID = nil
     }
 }

@@ -14,6 +14,8 @@ final class AppActions {
     var toggleOutline: (() -> Void)?
     var showPageSetup: (() -> Void)?
     var toggleFocusMode: (() -> Void)?
+    var showDashboard: (() -> Void)?
+    var manageTags: (() -> Void)?
     var printDocument: (() -> Void)?
 }
 
@@ -23,7 +25,7 @@ struct BNoteApp: App {
         Window("BNote", id: "main") {
             ContentView()
         }
-        .modelContainer(for: Note.self)
+        .modelContainer(for: [Note.self, Tag.self])
         .defaultSize(width: 1180, height: 820)
         .windowToolbarStyle(.unified)
         .commands { BNoteCommands() }
@@ -118,6 +120,10 @@ struct BNoteCommands: Commands {
                 .keyboardShortcut("p", modifiers: [.command, .shift])
             Button("Chế độ tập trung") { actions.toggleFocusMode?() }
                 .keyboardShortcut("f", modifiers: [.command, .control])
+            Button("Tổng quan") { actions.showDashboard?() }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+            Button("Quản lý thẻ…") { actions.manageTags?() }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()
             Button("Thước kẻ") { controller.canvasOptions.showRuler.toggle() }
                 .keyboardShortcut("r", modifiers: [.command, .control])
@@ -125,10 +131,12 @@ struct BNoteCommands: Commands {
                 .keyboardShortcut("g", modifiers: [.command, .control])
             Button("Đường biên lề") { controller.canvasOptions.showMarginGuides.toggle() }
             Divider()
-            Button("Phóng to") { controller.canvasOptions.zoom = min(2.5, controller.canvasOptions.zoom + 0.1) }
-            Button("Thu nhỏ") { controller.canvasOptions.zoom = max(0.5, controller.canvasOptions.zoom - 0.1) }
-            Button("Cỡ thật") { controller.canvasOptions.zoom = 1 }
+            Button("Phóng to") { controller.setZoom(controller.effectiveZoom + 0.1) }
+            Button("Thu nhỏ") { controller.setZoom(controller.effectiveZoom - 0.1) }
+            Button("Cỡ thật") { controller.setZoom(1) }
                 .keyboardShortcut("0", modifiers: .command)
+            Button("Vừa chiều rộng") { controller.zoomToFitWidth() }
+                .keyboardShortcut("9", modifiers: .command)
         }
     }
 

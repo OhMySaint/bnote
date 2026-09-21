@@ -296,13 +296,16 @@ struct CanvasOptions: Equatable {
     var showGrid = false
     var showMarginGuides = true
     var showRuler = true
+    /// Scale the sheet to fill the window width, the way Notion's column follows the window.
+    var fitWidth = true
+    /// Manual scale, used when `fitWidth` is off.
     var zoom: CGFloat = 1
 }
 
 /// Stacks pages vertically and grows or shrinks the page count as the shared
 /// text storage reflows.
 final class PagedDocumentView: NSView {
-    private enum Metrics {
+    enum Metrics {
         static let gap: CGFloat = 26
         static let sideInset: CGFloat = 36
     }
@@ -431,8 +434,12 @@ final class PagedDocumentView: NSView {
         config = newConfig
         options = newOptions
 
-        if let scrollView = enclosingScrollView, scrollView.magnification != options.zoom {
-            scrollView.magnification = options.zoom
+        if !options.fitWidth, let scrollView = enclosingScrollView, abs(scrollView.magnification - options.zoom) > 0.001 {
+            scrollView.setMagnification(options.zoom, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
+        }
+        if configChanged {
+            // Paper size feeds the fit-width ratio; let the host recompute it.
+            enclosingScrollView?.superview?.needsLayout = true
         }
 
         for page in pages {
@@ -750,9 +757,12 @@ final class EditorCanvasView: NSView {
     let ruler = RulerView()
     let canvas: PagedDocumentView
     private var showRuler = true
+    private var options = CanvasOptions()
+    private weak var controller: DocumentController?
 
     init(controller: DocumentController) {
         canvas = PagedDocumentView(controller: controller)
+        self.controller = controller
         super.init(frame: .zero)
 
         scrollView.hasVerticalScroller = true
@@ -763,7 +773,7 @@ final class EditorCanvasView: NSView {
         scrollView.borderType = .noBorder
         scrollView.allowsMagnification = true
         scrollView.minMagnification = 0.5
-        scrollView.maxMagnification = 2.5
+        scrollView.maxMagnification = 3.0
         scrollView.documentView = canvas
         scrollView.contentView.postsBoundsChangedNotifications = true
 
@@ -804,11 +814,38 @@ final class EditorCanvasView: NSView {
         needsLayout = true
     }
 
+    func apply(options newOptions: CanvasOptions) {
+        guard newOptions != options else { return }
+        options = newOptions
+        needsLayout = true
+    }
+
     override func layout() {
         super.layout()
         let rulerHeight: CGFloat = showRuler ? 22 : 0
         ruler.frame = NSRect(x: 0, y: 0, width: bounds.width, height: rulerHeight)
         scrollView.frame = NSRect(x: 0, y: rulerHeight, width: bounds.width, height: bounds.height - rulerHeight)
+        updateMagnification()
+    }
+
+    /// Fit mode: the sheet plus a small gutter always spans the visible width.
+    private func updateMagnification() {
+        let target: CGFloat
+        if options.fitWidth {
+            let gutter: CGFloat = 28
+            let available = scrollView.contentView.frame.width - gutter * 2
+            let pageWidth = canvas.config.size.width
+            // Capped: a sheet at 2× already fills a laptop screen with 26pt body text.
+            target = min(max(available / max(pageWidth, 1), 0.5), 2.0)
+        } else {
+            target = options.zoom
+        }
+        if abs(scrollView.magnification - target) > 0.001 {
+            scrollView.setMagnification(target, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
+            canvas.needsLayout = true
+        }
+        controller?.reportEffectiveZoom(target)
+        ruler.needsDisplay = true
     }
 }
 
@@ -819,6 +856,7 @@ struct PagedEditor: NSViewRepresentable {
         let view = EditorCanvasView(controller: controller)
         DispatchQueue.main.async {
             view.canvas.applyConfig(controller.config, options: controller.canvasOptions)
+            view.apply(options: controller.canvasOptions)
             view.setRulerVisible(controller.canvasOptions.showRuler)
             controller.focusEditor()
         }
@@ -827,6 +865,7 @@ struct PagedEditor: NSViewRepresentable {
 
     func updateNSView(_ nsView: EditorCanvasView, context: Context) {
         nsView.canvas.applyConfig(controller.config, options: controller.canvasOptions)
+        nsView.apply(options: controller.canvasOptions)
         nsView.setRulerVisible(controller.canvasOptions.showRuler)
         nsView.ruler.needsDisplay = true
     }
