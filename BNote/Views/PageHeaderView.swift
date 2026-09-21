@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 final class HeaderLayout: ObservableObject {
     @Published var leading: CGFloat = 36
     @Published var width: CGFloat = 595
+    @Published var scrollOffset: CGFloat = 0
+    @Published var top: CGFloat = 0
 }
 
 /// Notion-style page top, hosted inside the scrolling canvas above the first
@@ -83,6 +85,7 @@ struct PageHeaderView: View {
                     if note.coverData != nil {
                         Button("Chỉnh vị trí") { startReposition() }
                     }
+                    Button("Tùy chỉnh") { showHeaderOptions.toggle() }
                     Button("Bỏ") { removeCover() }
                 }
             }
@@ -194,26 +197,25 @@ struct PageHeaderView: View {
     private var header: some View {
         VStack(alignment: centered ? .center : .leading, spacing: 0) {
             // Ghost actions sit above everything, like Notion's "Add icon / Add cover".
-            HStack(spacing: 10) {
-                if !note.showIcon {
-                    ghostButton("face.smiling", "Thêm biểu tượng") { note.showIcon = true }
-                }
-                if !note.hasCover {
+            // With a cover the banner carries its own buttons instead.
+            if !note.hasCover {
+                HStack(spacing: 10) {
+                    if !note.showIcon {
+                        ghostButton("face.smiling", "Thêm biểu tượng") { note.showIcon = true }
+                    }
                     coverMenu(label: "Thêm ảnh bìa")
                         .menuStyle(.borderlessButton)
                         .fixedSize()
+                    ghostButton("slider.horizontal.3", "Tùy chỉnh") { showHeaderOptions.toggle() }
                 }
-                ghostButton("slider.horizontal.3", "Tùy chỉnh") { showHeaderOptions.toggle() }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(height: 22)
+                .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+                .opacity(headerHovering ? 1 : 0.55)
+                .animation(.easeOut(duration: 0.12), value: headerHovering)
+                .padding(.top, 8)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(height: 22)
-            .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
-            .opacity(headerHovering ? 1 : 0.55)
-            .animation(.easeOut(duration: 0.12), value: headerHovering)
-            .padding(.top, note.hasCover ? 0 : 8)
-            .offset(y: note.hasCover ? -note.coverHeight + 4 : 0)   // float over the cover's bottom
-            .frame(height: note.hasCover ? 0 : 30)
 
             HStack {
                 if centered { Spacer(minLength: 0) }

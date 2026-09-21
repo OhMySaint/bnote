@@ -10,19 +10,32 @@ struct NoteEditorView: View {
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Tag.name) private var tags: [Tag]
+    @ObservedObject private var headerLayout = DocumentController.shared.headerLayout
+
+    /// The Notion-style header is a SwiftUI overlay above the (magnified) canvas,
+    /// scrolled in step with it, so it stays crisp and fully interactive.
+    private var editorWithHeader: some View {
+        let layout = headerLayout
+        let height = PageHeaderView.height(for: note, width: layout.width)
+        let visible = max(0, height - layout.scrollOffset)
+        return PagedEditor(controller: controller, headerHeight: height)
+            .overlay(alignment: .top) {
+                PageHeaderView(note: note, layout: layout)
+                    .frame(height: height)
+                    .frame(height: visible, alignment: .bottom)
+                    .clipped()
+                    .contentShape(.rect)
+                    .padding(.top, layout.top)
+                    .allowsHitTesting(visible > 1)
+            }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             FormatToolbar(controller: controller)
             Divider()
             HStack(spacing: 0) {
-                PagedEditor(
-                    controller: controller,
-                    // A hosting view made inside the canvas gets no SwiftUI environment,
-                    // so hand it the model container explicitly.
-                    header: AnyView(PageHeaderView(note: note, layout: controller.headerLayout).modelContainer(context.container)),
-                    headerHeight: { width in PageHeaderView.height(for: note, width: width) }
-                )
+                editorWithHeader
                 if showInspector {
                     Divider()
                     InspectorPanel(controller: controller, tab: $inspectorTab, note: note)

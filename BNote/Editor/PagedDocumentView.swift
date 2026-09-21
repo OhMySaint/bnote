@@ -467,9 +467,8 @@ final class PagedDocumentView: NSView {
     private var options = CanvasOptions()
     private var isPaginating = false
 
-    /// Notion-style page top (cover, icon, title) hosted above the first sheet.
-    private var headerHost: NSHostingView<AnyView>?
-    private var headerHeightProvider: ((CGFloat) -> CGFloat)?
+    /// Space reserved above the first sheet for the page header, which is a
+    /// SwiftUI overlay outside the magnified scroll view (in screen points).
     private var headerHeight: CGFloat = 0
 
     var pageCount: Int { max(1, pages.count) }
@@ -617,23 +616,9 @@ final class PagedDocumentView: NSView {
         }
     }
 
-    func setHeader(_ view: AnyView?, height: ((CGFloat) -> CGFloat)?) {
-        headerHeightProvider = height
-        guard let view else {
-            headerHost?.removeFromSuperview()
-            headerHost = nil
-            headerHeight = 0
-            needsLayout = true
-            return
-        }
-        if let headerHost {
-            headerHost.rootView = view
-        } else {
-            let host = NSHostingView(rootView: view)
-            host.sizingOptions = []
-            addSubview(host, positioned: .below, relativeTo: nil)
-            headerHost = host
-        }
+    func setHeaderHeight(_ height: CGFloat) {
+        guard abs(height - headerHeight) > 0.5 else { return }
+        headerHeight = height
         needsLayout = true
     }
 
@@ -644,37 +629,22 @@ final class PagedDocumentView: NSView {
         let width = max(visibleWidth, config.size.width + Metrics.sideInset * 2)
         pageOriginX = ((width - config.size.width) / 2).rounded()
 
-        // Header column lines up with the sheet's text box.
-        if let headerHost, let provider = headerHeightProvider {
-            let contentWidth = config.contentSize.width
-            headerHeight = provider(contentWidth)
-            headerHost.frame = NSRect(x: 0, y: 0, width: width, height: headerHeight)
-            if let layout = controller?.headerLayout {
-                let leading = pageOriginX + config.margins.left
-                if abs(layout.leading - leading) > 0.5 || abs(layout.width - contentWidth) > 0.5 {
-                    DispatchQueue.main.async {
-                        layout.leading = leading
-                        layout.width = contentWidth
-                    }
-                }
-            }
-        } else {
-            headerHeight = 0
-        }
+        // The header overlay is unscaled; convert its height into document points.
+        let magnification = enclosingScrollView?.magnification ?? 1
+        let headerInDocument = headerHeight / max(magnification, 0.01)
 
         // Continuous: the first sheet slides up under the header so text starts
         // right below the title; sheets butt against each other.
         let gap: CGFloat = options.continuous ? 0 : Metrics.gap
         var y = options.continuous
-            ? (headerHeight > 0 ? max(0, headerHeight - config.margins.top + 6) : 0)
-            : headerHeight + Metrics.gap
+            ? (headerHeight > 0 ? max(0, headerInDocument - config.margins.top + 6) : 0)
+            : headerInDocument + Metrics.gap
         for (index, page) in pages.enumerated() {
             page.pageNumber = index + 1
             page.frame = NSRect(x: pageOriginX, y: y, width: config.size.width, height: config.size.height)
             page.apply(config: config, options: options)
             y += config.size.height + gap
         }
-        if let headerHost { addSubview(headerHost, positioned: .above, relativeTo: nil) }
         enclosingScrollView?.backgroundColor = options.continuous ? .textBackgroundColor : .underPageBackgroundColor
 
         let newSize = NSSize(width: width, height: y)
@@ -1030,6 +1000,26 @@ final class EditorCanvasView: NSView {
 
     @objc private func refreshRuler() {
         ruler.needsDisplay = true
+        publishHeaderLayout()
+    }
+
+    /// Where the header overlay should sit, in this view's (unscaled) points.
+    private func publishHeaderLayout() {
+        guard let layout = controller?.headerLayout else { return }
+        let magnification = scrollView.magnification
+        let clip = scrollView.contentView.bounds.origin
+        let leading = (canvas.pageOriginX + canvas.config.margins.left - clip.x) * magnification
+        let width = canvas.config.contentSize.width * magnification
+        let scrollOffset = clip.y * magnification
+        let rulerHeight: CGFloat = showRuler ? 22 : 0
+        guard abs(layout.leading - leading) > 0.5 || abs(layout.width - width) > 0.5
+            || abs(layout.scrollOffset - scrollOffset) > 0.5 || abs(layout.top - rulerHeight) > 0.5 else { return }
+        DispatchQueue.main.async {
+            layout.leading = leading
+            layout.width = width
+            layout.scrollOffset = scrollOffset
+            layout.top = rulerHeight
+        }
     }
 
     func setRulerVisible(_ visible: Bool) {
@@ -1071,17 +1061,17 @@ final class EditorCanvasView: NSView {
         }
         controller?.reportEffectiveZoom(target)
         ruler.needsDisplay = true
+        publishHeaderLayout()
     }
 }
 
 struct PagedEditor: NSViewRepresentable {
     @ObservedObject var controller: DocumentController
-    var header: AnyView?
-    var headerHeight: ((CGFloat) -> CGFloat)?
+    var headerHeight: CGFloat = 0
 
     func makeNSView(context: Context) -> EditorCanvasView {
         let view = EditorCanvasView(controller: controller)
-        view.canvas.setHeader(header, height: headerHeight)
+        view.canvas.setHeaderHeight(headerHeight)
         DispatchQueue.main.async {
             view.canvas.applyConfig(controller.config, options: controller.canvasOptions)
             view.apply(options: controller.canvasOptions)
@@ -1092,7 +1082,7 @@ struct PagedEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: EditorCanvasView, context: Context) {
-        nsView.canvas.setHeader(header, height: headerHeight)
+        nsView.canvas.setHeaderHeight(headerHeight)
         nsView.canvas.applyConfig(controller.config, options: controller.canvasOptions)
         nsView.apply(options: controller.canvasOptions)
         nsView.setRulerVisible(controller.canvasOptions.showRuler)
