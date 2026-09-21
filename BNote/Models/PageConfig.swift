@@ -61,6 +61,12 @@ enum Unit {
     static func centimeters(_ points: CGFloat) -> String {
         String(format: "%.2f", points / centimeter)
     }
+
+    /// Snaps a drag to the nearest quarter centimetre so values stay tidy.
+    static func snap(_ points: CGFloat) -> CGFloat {
+        let step = centimeter / 4
+        return max(0, (points / step).rounded() * step)
+    }
 }
 
 struct PageMargins: Equatable {
@@ -82,15 +88,16 @@ struct PageMargins: Equatable {
 }
 
 struct MarginPreset: Identifiable {
+    let shortLabel: String
     let label: String
     let margins: PageMargins
     var id: String { label }
 
     static let all: [MarginPreset] = [
-        .init(label: "Hẹp — 1,27 cm", margins: PageMargins(uniform: 36)),
-        .init(label: "Thường — 2,54 cm", margins: PageMargins(uniform: 72)),
-        .init(label: "Rộng — 3,81 cm", margins: PageMargins(uniform: 108)),
-        .init(label: "Phản chiếu — trái rộng", margins: PageMargins(top: 72, bottom: 72, left: 108, right: 72)),
+        .init(shortLabel: "Rộng chữ", label: "Toàn chiều rộng — lề 1,27 cm", margins: PageMargins(uniform: 36)),
+        .init(shortLabel: "Thường", label: "Thường — lề 2,54 cm", margins: PageMargins(uniform: 72)),
+        .init(shortLabel: "Thoáng", label: "Thoáng — lề 3,81 cm", margins: PageMargins(uniform: 108)),
+        .init(shortLabel: "Đóng gáy", label: "Đóng gáy — lề trái 3,81 cm", margins: PageMargins(top: 72, bottom: 72, left: 108, right: 72)),
     ]
 }
 

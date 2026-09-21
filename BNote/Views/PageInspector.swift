@@ -43,6 +43,9 @@ enum InspectorTab: String, CaseIterable, Identifiable {
 
 struct PageSetupPanel: View {
     @ObservedObject var controller: DocumentController
+    @State private var showCustomMargins = false
+
+    private static let sliderRange: ClosedRange<Double> = 0.5...5.0
 
     var body: some View {
         ScrollView {
@@ -69,28 +72,28 @@ struct PageSetupPanel: View {
                     .labelsHidden()
                 }
 
-                section("Lề (cm)") {
-                    Grid(horizontalSpacing: 8, verticalSpacing: 6) {
-                        GridRow {
-                            marginField("Trên", \.top)
-                            marginField("Dưới", \.bottom)
-                        }
-                        GridRow {
-                            marginField("Trái", \.left)
-                            marginField("Phải", \.right)
-                        }
-                    }
-                    Menu("Lề đặt sẵn") {
-                        ForEach(MarginPreset.all) { preset in
-                            Button(preset.label) {
-                                var config = controller.config
-                                config.margins = preset.margins
-                                config.clampMargins()
-                                controller.config = config
+                section("Lề") {
+                    presetCards
+                    marginSlider("Ngang", value: horizontalMargin, symbol: "arrow.left.and.right")
+                    marginSlider("Dọc", value: verticalMargin, symbol: "arrow.up.and.down")
+                    DisclosureGroup("Tùy chỉnh từng cạnh", isExpanded: $showCustomMargins) {
+                        Grid(horizontalSpacing: 8, verticalSpacing: 6) {
+                            GridRow {
+                                marginField("Trên", \.top)
+                                marginField("Dưới", \.bottom)
+                            }
+                            GridRow {
+                                marginField("Trái", \.left)
+                                marginField("Phải", \.right)
                             }
                         }
+                        .padding(.top, 4)
                     }
-                    .menuStyle(.borderlessButton)
+                    .font(.caption)
+                    Text("Mẹo: kéo đường biên nét đứt trên trang, hoặc tay nắm ▼ trên thước.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 section("Hiển thị") {
@@ -112,6 +115,89 @@ struct PageSetupPanel: View {
             }
             .padding(14)
         }
+    }
+
+    // MARK: - Margin controls
+
+    /// One-click presets drawn as tiny page diagrams, the way Notion offers
+    /// layouts instead of numbers.
+    private var presetCards: some View {
+        HStack(spacing: 6) {
+            ForEach(MarginPreset.all) { preset in
+                let selected = controller.config.margins == preset.margins
+                Button {
+                    applyMargins(preset.margins)
+                } label: {
+                    VStack(spacing: 4) {
+                        MarginThumbnail(margins: preset.margins, paper: controller.config)
+                            .frame(width: 34, height: 44)
+                        Text(preset.shortLabel)
+                            .font(.caption2)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(
+                        selected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.04),
+                        in: .rect(cornerRadius: 7)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(selected ? Color.accentColor : .clear, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .help(preset.label)
+            }
+        }
+    }
+
+    private func marginSlider(_ label: String, value: Binding<Double>, symbol: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 14)
+            Slider(value: value, in: Self.sliderRange, step: 0.25)
+            Text(String(format: "%.2f cm", value.wrappedValue))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 54, alignment: .trailing)
+        }
+        .help("Lề \(label.lowercased())")
+    }
+
+    /// Left and right together.
+    private var horizontalMargin: Binding<Double> {
+        Binding(
+            get: { controller.config.margins.left / Unit.centimeter },
+            set: { cm in
+                var margins = controller.config.margins
+                margins.left = cm * Unit.centimeter
+                margins.right = cm * Unit.centimeter
+                applyMargins(margins)
+            }
+        )
+    }
+
+    /// Top and bottom together.
+    private var verticalMargin: Binding<Double> {
+        Binding(
+            get: { controller.config.margins.top / Unit.centimeter },
+            set: { cm in
+                var margins = controller.config.margins
+                margins.top = cm * Unit.centimeter
+                margins.bottom = cm * Unit.centimeter
+                applyMargins(margins)
+            }
+        )
+    }
+
+    private func applyMargins(_ margins: PageMargins) {
+        var config = controller.config
+        config.margins = margins
+        config.clampMargins()
+        controller.config = config
     }
 
     @ViewBuilder
@@ -178,5 +264,30 @@ struct PageSetupPanel: View {
             get: { controller.canvasOptions[keyPath: keyPath] },
             set: { controller.canvasOptions[keyPath: keyPath] = $0 }
         )
+    }
+}
+
+/// Miniature sheet showing where the text box sits for a given set of margins.
+private struct MarginThumbnail: View {
+    let margins: PageMargins
+    let paper: PageConfig
+
+    var body: some View {
+        GeometryReader { geometry in
+            let scaleX = geometry.size.width / paper.size.width
+            let scaleY = geometry.size.height / paper.size.height
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(nsColor: .textBackgroundColor))
+                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(.separator, lineWidth: 0.5))
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.35))
+                    .frame(
+                        width: max(2, (paper.size.width - margins.left - margins.right) * scaleX),
+                        height: max(2, (paper.size.height - margins.top - margins.bottom) * scaleY)
+                    )
+                    .offset(x: margins.left * scaleX, y: margins.top * scaleY)
+            }
+        }
     }
 }
