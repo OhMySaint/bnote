@@ -34,6 +34,24 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 - Mục lục tự dựng từ các Đầu mục, bấm để nhảy tới
 - Tìm kiếm xuyên suốt mọi trang, lọc theo thẻ
 
+**Ảnh & video**
+- Dán ảnh (⌘V), kéo thả file ảnh vào trang, dán link ảnh → tự tải về
+- Dán link YouTube → thẻ video có nút phát; click phát ngay trong app
+- Click ảnh để chọn: thanh nổi đổi cỡ S/M/L/rộng, canh trái/giữa/phải, sao chép, lưu, xóa;
+  kéo góc dưới phải để đổi kích thước tự do (Undo được)
+- Mọi link web mở trong cửa sổ xem của app, có nút mở bằng trình duyệt
+
+**Khối mã cho người học IT**
+- `/Khối mã`: khung riêng, phông đều nét, tô màu từ khóa / chuỗi / chú thích / số / kiểu
+  (Swift, Python, JS/TS, Java, Go, Rust, SQL, shell…) — tự tô lại khi gõ
+- `/Mã nội dòng` cho tên hàm, lệnh trong câu; xuất Markdown dạng ``` fence
+
+**Tổ chức & quản lý**
+- Màn **Tổng quan** (⇧⌘H): mọi trang dạng lưới/danh sách, tìm, sắp xếp, lọc thẻ, thống kê
+- **Hệ thống thẻ** (⇧⌘T): thẻ có màu, đổi tên (gộp khi trùng), xóa gỡ khỏi mọi trang, gợi ý khi gõ
+- Chuột phải trên trang: đổi tên tại chỗ, thêm con, nhân bản, đổi icon, di chuyển tới, xóa
+- Ảnh bìa (ảnh hoặc gradient, 3 mức cao), đầu trang canh giữa / ẩn icon / mô tả ngắn
+
 **Nhập / xuất**
 - Nhập: `.rtf` `.rtfd` `.doc` `.docx` `.odt` `.html` `.md` `.txt`
 - Xuất: `.rtf` `.docx` `.html` `.md` `.txt` `.pdf`, và In (⌘P)
@@ -54,6 +72,16 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 | ⇧⌘P | Mở thiết lập trang |
 | ⌃⌘R / ⌃⌘G | Thước kẻ / lưới ô vuông |
 | ⌘0 | Về cỡ thật 100% |
+
+## Đóng gói bản dùng thử
+
+```bash
+scripts/package.sh
+```
+
+Tạo `dist/BNote-<phiên bản>.dmg` (Release, ký bằng chứng chỉ Apple Development trong máy).
+Người nhận kéo app vào Applications, lần đầu chuột phải ▸ Open vì bản này chưa công chứng
+(notarize) — muốn bỏ bước đó cần tài khoản Apple Developer trả phí để ký Developer ID + notarize.
 
 ## Chạy
 

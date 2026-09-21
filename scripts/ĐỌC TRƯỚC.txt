@@ -1,0 +1,17 @@
+BNote 0.2.0 — bản dùng thử
+
+CÀI ĐẶT
+1. Kéo BNote vào thư mục Applications.
+2. Lần đầu mở: nhấn CHUỘT PHẢI vào BNote → chọn "Open" (Mở) → bấm "Open" lần nữa.
+   (Bản dùng thử chưa qua công chứng Apple nên macOS sẽ cảnh báo; chỉ cần làm 1 lần.)
+   Nếu vẫn bị chặn, mở Terminal và chạy:
+   xattr -dr com.apple.quarantine /Applications/BNote.app
+
+YÊU CẦU: macOS 15 trở lên.
+
+DỮ LIỆU: lưu cục bộ trong máy, tại
+~/Library/Containers/com.hoangson.BNote/
+
+PHÍM TẮT NHANH
+⌘N trang mới · gõ / trong trang để chèn khối · ⇧⌘H tổng quan · ⌃⌘F chế độ tập trung
+⌘9 vừa chiều rộng · ⇧⌘P thiết lập trang · ⇧⌘T quản lý thẻ · ⇧⌘I nhập · File ▸ Xuất
