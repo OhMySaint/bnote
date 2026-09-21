@@ -80,6 +80,7 @@ final class DocumentController: NSObject, ObservableObject {
 
         textStorage.setAttributedString(attributed)
         closeSlashMenu()
+        slashDismissedTrigger = nil
         self.config = config
         documentView?.applyConfig(config, options: canvasOptions)
         documentView?.resetUndo()
@@ -670,12 +671,24 @@ final class DocumentController: NSObject, ObservableObject {
 extension DocumentController {
     /// Opens while the caret sits right after a "/" that starts a word.
     func updateSlashMenu() {
-        guard let textView = activeTextView, textView.selectedRange().length == 0 else {
+        guard let textView = activeTextView else {
             closeSlashMenu()
             return
         }
+        // While an input method is composing, the "caret" is the end of the
+        // marked text; some IMEs also keep that text selected.
+        let caret: Int
+        if textView.hasMarkedText() {
+            caret = textView.markedRange().upperBound
+        } else {
+            let selection = textView.selectedRange()
+            guard selection.length == 0 else {
+                closeSlashMenu()
+                return
+            }
+            caret = selection.location
+        }
         let string = textStorage.string as NSString
-        let caret = textView.selectedRange().location
         guard string.length > 0, caret <= string.length, caret > 0 else {
             closeSlashMenu()
             return
@@ -766,7 +779,43 @@ extension DocumentController {
         closeSlashMenu()
     }
 
+    /// A dismissal belongs to one specific "/" character. Any edit at or before
+    /// it either deletes or shifts that character, so the dismissal is void.
+    func noteEditForSlashDismissal(at range: NSRange) {
+        guard let dismissed = slashDismissedTrigger, range.location <= dismissed else { return }
+        slashDismissedTrigger = nil
+    }
+
     var isSlashMenuOpen: Bool { slashTrigger != nil && !slashModel.commands.isEmpty }
+
+    /// Raw key handling for the menu. Returns true when the key was consumed.
+    func handleSlashKey(_ event: NSEvent, in textView: NSTextView) -> Bool {
+        guard isSlashMenuOpen, !event.modifierFlags.contains(.command) else { return false }
+        switch event.keyCode {
+        case 125: // ↓
+            moveSlashSelection(1)
+            return true
+        case 126: // ↑
+            moveSlashSelection(-1)
+            return true
+        case 36, 76, 48: // Return, keypad Enter, Tab
+            finishComposition(in: textView)
+            commitSlashSelection()
+            return true
+        case 53: // Escape
+            dismissSlashMenu()
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Keeps whatever the input method has composed so far as plain text.
+    private func finishComposition(in textView: NSTextView) {
+        guard textView.hasMarkedText() else { return }
+        textView.unmarkText()
+        textView.inputContext?.discardMarkedText()
+    }
 
     func moveSlashSelection(_ delta: Int) {
         guard !slashModel.commands.isEmpty else { return }
@@ -781,6 +830,7 @@ extension DocumentController {
 
     func runSlashCommand(_ command: SlashCommand) {
         guard let textView = activeTextView, let trigger = slashTrigger else { return }
+        finishComposition(in: textView)
         let caret = textView.selectedRange().location
         closeSlashMenu()
 
@@ -1097,6 +1147,7 @@ extension DocumentController: NSTextViewDelegate {
 
     /// Enter inside a list continues it; Enter on an empty item leaves the list.
     func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        noteEditForSlashDismissal(at: affectedCharRange)
         guard replacementString == "\n", affectedCharRange.length == 0 else { return true }
         let string = textStorage.string as NSString
         guard string.length > 0, affectedCharRange.location > 0 else { return true }

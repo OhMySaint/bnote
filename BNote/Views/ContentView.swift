@@ -120,6 +120,8 @@ struct ContentView: View {
             note.content = text
             note.touch()
         }
+        // The editor view may still be mounting; focus once it exists.
+        DispatchQueue.main.async { controller.focusEditor() }
     }
 
     // MARK: - Page actions

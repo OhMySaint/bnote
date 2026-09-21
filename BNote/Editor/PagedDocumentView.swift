@@ -1,9 +1,35 @@
 import AppKit
 import SwiftUI
 
-/// Text view for one page. Only extra job: clicking a to-do marker toggles it
-/// instead of placing the caret.
+/// Text view for one page. Extra jobs: route menu keys to the "/" menu before
+/// the input method sees them, and toggle a to-do marker on click.
 final class PageTextView: NSTextView {
+    /// Input methods (Vietnamese Telex, CJK…) swallow Return and the arrows
+    /// while composing, so the "/" menu takes them here, ahead of `interpretKeyEvents`.
+    override func keyDown(with event: NSEvent) {
+        if let controller = delegate as? DocumentController,
+           controller.handleSlashKey(event, in: self) {
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    /// Composition edits do not post `textDidChange`, so the menu is refreshed here.
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        let controller = delegate as? DocumentController
+        let edited = replacementRange.location == NSNotFound
+            ? (hasMarkedText() ? markedRange() : self.selectedRange())
+            : replacementRange
+        controller?.noteEditForSlashDismissal(at: edited)
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        controller?.updateSlashMenu()
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        (delegate as? DocumentController)?.updateSlashMenu()
+    }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if let controller = delegate as? DocumentController,
