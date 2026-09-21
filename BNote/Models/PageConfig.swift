@@ -89,7 +89,6 @@ enum Defaults {
     static let paperKey = "defaultPaper"
     static let orientationKey = "defaultOrientation"
     static let fullWidthKey = "fullWidth"
-    static let smallTextKey = "smallText"
     static let gridKey = "showGrid"
     static let guidesKey = "showMarginGuides"
     static let continuousKey = "continuousLayout"
@@ -101,7 +100,6 @@ enum Defaults {
             paperKey: Paper.a4.rawValue,
             orientationKey: PageOrientation.portrait.rawValue,
             fullWidthKey: false,
-            smallTextKey: false,
             gridKey: false,
             guidesKey: false,
             continuousKey: true,
@@ -131,8 +129,7 @@ enum Defaults {
             showGrid: d.bool(forKey: gridKey),
             showMarginGuides: d.bool(forKey: guidesKey),
             continuous: d.object(forKey: continuousKey) == nil ? true : d.bool(forKey: continuousKey),
-            fullWidth: d.bool(forKey: fullWidthKey),
-            smallText: d.bool(forKey: smallTextKey)
+            fullWidth: d.bool(forKey: fullWidthKey)
         )
     }
 }

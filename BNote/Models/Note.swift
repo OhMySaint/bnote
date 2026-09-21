@@ -32,6 +32,7 @@ final class Note {
     var showIcon: Bool = true
     // Layout (per page, like Notion)
     var fullWidth: Bool = false
+    /// No longer offered; kept so existing stores open without a migration.
     var smallText: Bool = false
 
     var parent: Note?

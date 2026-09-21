@@ -19,7 +19,7 @@ UI=(BNote/Models/*.swift BNote/Editor/*.swift
     BNote/Views/NoteEditorView.swift BNote/Views/PageHeaderView.swift BNote/Views/FormatToolbar.swift
     BNote/Views/PageInspector.swift BNote/Views/OutlinePanel.swift BNote/Views/ColorPalette.swift
     BNote/Views/CoverStyle.swift BNote/Views/TagViews.swift BNote/Views/SettingsView.swift
-    BNote/Views/CoverControls.swift)
+    BNote/Views/CoverControls.swift BNote/Views/FindBar.swift)
 
 run() {
   local name=$1; shift

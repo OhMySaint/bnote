@@ -53,6 +53,7 @@ final class DocumentController: NSObject, ObservableObject {
     var onSave: ((Data, String) -> Void)?
 
     let slashModel = SlashMenuModel()
+    let find = FindModel()
     private lazy var slashPanel = SlashMenuPanel(model: slashModel)
     let headerLayout = HeaderLayout()
     let mediaModel = MediaToolbarModel()
@@ -119,6 +120,7 @@ final class DocumentController: NSObject, ObservableObject {
         refreshDerivedState()
         refreshFormatState()
         isLoading = false
+        refreshFind(preferring: 0)
     }
 
     func snapshot() -> (data: Data, plainText: String) {
@@ -173,6 +175,7 @@ final class DocumentController: NSObject, ObservableObject {
         renumberLists()
         refreshDerivedState()
         updateSlashMenu()
+        refreshFind()
         scheduleSave()
     }
 
@@ -197,6 +200,7 @@ final class DocumentController: NSObject, ObservableObject {
             documentView?.updatePagination()
             renumberLists()
             refreshDerivedState()
+            refreshFind()
         }
     }
 
@@ -1010,9 +1014,6 @@ final class DocumentController: NSObject, ObservableObject {
         canvasOptions.fullWidth.toggle()
     }
 
-    func toggleSmallText() {
-        canvasOptions.smallText.toggle()
-    }
 }
 
 // MARK: - Slash menu

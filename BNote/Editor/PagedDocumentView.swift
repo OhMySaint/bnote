@@ -452,12 +452,6 @@ struct CanvasOptions: Equatable {
     var continuous = true
     /// Notion's "Full width": let the column use the whole window instead of the reading width.
     var fullWidth = false
-    /// Notion's "Small text": the document renders a notch smaller, more per line.
-    var smallText = false
-
-    static let smallTextScale: CGFloat = 0.875
-    /// The only scaling left: Notion's two sizes, never a free zoom.
-    var magnification: CGFloat { continuous && smallText ? Self.smallTextScale : 1 }
 }
 
 /// Stacks pages vertically and grows or shrinks the page count as the shared
@@ -671,25 +665,23 @@ final class PagedDocumentView: NSView {
     private func layoutContinuousColumn() {
         guard let page = pages.first, let layoutManager else { return }
         let scrollView = enclosingScrollView
-        let magnification = options.magnification
-        // Window size in screen points, independent of the small-text scale.
+        // Window size in screen points.
         let windowWidth = scrollView?.contentView.frame.width ?? bounds.width
         let windowHeight = scrollView?.contentView.frame.height ?? bounds.height
 
         let ratio = options.fullWidth ? Metrics.fullWidthGutterRatio : Metrics.readingGutterRatio
         let gutter = max(Metrics.minimumGutter, (windowWidth * ratio).rounded())
         let columnVisual = max(Metrics.minimumColumn, windowWidth - gutter * 2)
-        // "Small text" fits more per line: the column holds more document points.
-        let columnWidth = (columnVisual / magnification).rounded()
+        let columnWidth = columnVisual.rounded()
 
-        // Document width in document points: the window, or the minimum column plus gutters.
-        let docWidth = max(windowWidth / magnification, columnWidth + (gutter * 2) / magnification).rounded()
+        // Document width: the window, or the minimum column plus gutters.
+        let docWidth = max(windowWidth, columnWidth + gutter * 2).rounded()
         let columnX = ((docWidth - columnWidth) / 2).rounded()
         contentLeading = columnX
         contentWidth = columnWidth
         pageOriginX = columnX - config.margins.left
 
-        let headerInDocument = headerHeight / magnification
+        let headerInDocument = headerHeight
         let container = page.textView.textContainer
         let tall = NSSize(width: columnWidth, height: 10_000_000)
         if container?.size != tall {
@@ -697,7 +689,7 @@ final class PagedDocumentView: NSView {
         }
         layoutManager.ensureLayout(for: container!)
         let used = layoutManager.usedRect(for: container!).height
-        let textHeight = max(used, windowHeight / magnification - headerInDocument - Metrics.columnTop) + Metrics.tailRoom
+        let textHeight = max(used, windowHeight - headerInDocument - Metrics.columnTop) + Metrics.tailRoom
 
         page.textView.minSize = NSSize(width: columnWidth, height: textHeight)
         page.textView.maxSize = NSSize(width: columnWidth, height: textHeight)
@@ -718,7 +710,7 @@ final class PagedDocumentView: NSView {
         contentLeading = pageOriginX + config.margins.left
         contentWidth = config.contentSize.width
 
-        var y = headerHeight / options.magnification + Metrics.gap
+        var y = headerHeight + Metrics.gap
         for (index, page) in pages.enumerated() {
             page.pageNumber = index + 1
             page.frame = NSRect(x: pageOriginX, y: y, width: config.size.width, height: config.size.height)
@@ -824,7 +816,6 @@ final class EditorCanvasView: NSView {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = NSColor.underPageBackgroundColor
         scrollView.borderType = .noBorder
-        // Magnification is only ever the small-text scale; no pinch zoom.
         scrollView.allowsMagnification = false
         scrollView.documentView = canvas
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -854,15 +845,13 @@ final class EditorCanvasView: NSView {
         publishHeaderLayout()
     }
 
-    /// Where the header overlay should sit, in screen points (the overlay is
-    /// outside the magnified scroll view).
+    /// Where the header overlay (outside the scroll view) should sit.
     private func publishHeaderLayout() {
         guard let layout = controller?.headerLayout else { return }
-        let magnification = scrollView.magnification
         let clip = scrollView.contentView.bounds.origin
-        let leading = (canvas.contentLeading - clip.x) * magnification
-        let width = canvas.contentWidth * magnification
-        let scrollOffset = clip.y * magnification
+        let leading = canvas.contentLeading - clip.x
+        let width = canvas.contentWidth
+        let scrollOffset = clip.y
         guard abs(layout.leading - leading) > 0.5 || abs(layout.width - width) > 0.5
             || abs(layout.scrollOffset - scrollOffset) > 0.5 else { return }
         DispatchQueue.main.async {
@@ -881,18 +870,8 @@ final class EditorCanvasView: NSView {
     override func layout() {
         super.layout()
         scrollView.frame = bounds
-        updateMagnification()
         // Window resizes change the visible width the column is centred in.
         canvas.relayout()
-    }
-
-    /// Small text is pure magnification: the column keeps its document width.
-    private func updateMagnification() {
-        let target = options.magnification
-        if abs(scrollView.magnification - target) > 0.001 {
-            scrollView.setMagnification(target, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
-            canvas.relayout()
-        }
         publishHeaderLayout()
     }
 }

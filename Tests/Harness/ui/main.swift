@@ -125,6 +125,24 @@ shoot("bnote-editor.png")
 check("bìa nằm trong canvas cuộn", controller.documentView != nil)
 
 
+print("== thanh tìm kiếm ⌘F ==")
+controller.load(data: nil, plainText: "Hà Nội mùa thu, hà nội mùa đông. Sài Gòn nắng quanh năm.", config: PageConfig()); pump(0.3)
+controller.showFind(replace: true); pump(0.3)
+controller.find.query = "hà nội"; controller.findQueryChanged(); pump(0.3)
+shoot("bnote-find.png")
+check("thanh tìm: 2 kết quả", controller.find.matches.count == 2, "got \(controller.find.matches.count)")
+func findTextField() -> NSTextField? {
+    func find(_ v: NSView) -> NSTextField? {
+        if let f = v as? NSTextField, f.placeholderString == "Tìm trong trang" { return f }
+        for sub in v.subviews { if let f = find(sub) { return f } }
+        return nil
+    }
+    return window.contentView.flatMap(find)
+}
+check("ô tìm hiển thị với chuỗi", findTextField()?.stringValue == "hà nội", "field=\(String(describing: findTextField()?.stringValue))")
+controller.hideFind(); pump(0.3)
+check("đóng thanh: ô tìm biến mất", findTextField() == nil)
+
 print("== bấm vào đầu trang ở hai bố cục ==")
 MainActor.assumeIsolated { note.coverData = nil; note.coverStyle = ""; note.tags = []; note.title = "hv" }
 controller.load(data: nil, plainText: "fsdfs", config: PageConfig()); pump(0.5)
@@ -171,20 +189,6 @@ if let host = canvasHost() {
     check("không scale", abs(host.scrollView.magnification - 1) < 0.001)
 }
 
-
-print("== chữ nhỏ: đầu trang không bị chồng ==")
-for small in [true, false] {
-    controller.canvasOptions.smallText = small; pump(0.5); window.contentView?.layoutSubtreeIfNeeded(); pump(0.3)
-    guard let host = canvasHost() else { break }
-    let mag = host.scrollView.magnification
-    let page = host.canvas.pages[0]
-    let layout = controller.headerLayout
-    let headerVisual = PageHeaderView.height(for: note, width: layout.width)
-    let textTopVisual = (page.frame.minY + page.textView.frame.minY - host.scrollView.contentView.bounds.origin.y) * mag
-    let label = small ? "chữ nhỏ" : "cỡ thường"
-    check("\(label): chữ nằm dưới đầu trang", abs(textTopVisual - headerVisual - PagedDocumentView.Metrics.columnTop * mag) < 2, String(format: "textTop=%.1f header=%.1f mag=%.3f", textTopVisual, headerVisual, mag))
-    check("\(label): cột tiêu đề thẳng với cột chữ", abs(layout.leading - (host.canvas.contentLeading - host.scrollView.contentView.bounds.origin.x) * mag) < 2, String(format: "lead=%.1f col=%.1f", layout.leading, host.canvas.contentLeading * mag))
-}
 
 print(failures.isEmpty ? "\nTẤT CẢ ĐỀU ĐẠT" : "\nTHẤT BẠI (\(failures.count)): \(failures.joined(separator: " | "))")
 exit(failures.isEmpty ? 0 : 1)

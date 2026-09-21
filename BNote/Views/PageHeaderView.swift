@@ -308,7 +308,6 @@ struct PageHeaderView: View {
             Toggle("Hiện biểu tượng", isOn: $note.showIcon)
             Divider()
             Toggle("Toàn chiều rộng", isOn: Binding(get: { note.fullWidth }, set: { note.fullWidth = $0; DocumentController.shared.canvasOptions.fullWidth = $0 }))
-            Toggle("Chữ nhỏ", isOn: Binding(get: { note.smallText }, set: { note.smallText = $0; DocumentController.shared.canvasOptions.smallText = $0 }))
             Toggle("Ảnh bìa", isOn: Binding(
                 get: { note.hasCover },
                 set: { on in

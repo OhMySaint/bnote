@@ -88,7 +88,6 @@ struct ContentView: View {
         .onChange(of: controller.canvasOptions) { _, options in
             guard let note = selectedNote else { return }
             if note.fullWidth != options.fullWidth { note.fullWidth = options.fullWidth }
-            if note.smallText != options.smallText { note.smallText = options.smallText }
         }
         .onAppear(perform: wireCommands)
         .sheet(isPresented: $showTagManager) { TagManagerView() }
@@ -134,7 +133,6 @@ struct ContentView: View {
             return
         }
         controller.canvasOptions.fullWidth = note.fullWidth
-        controller.canvasOptions.smallText = note.smallText
         controller.load(data: note.rtfData, plainText: note.content, config: note.pageConfig)
         controller.onSave = { [weak note] data, text in
             guard let note else { return }
@@ -154,7 +152,6 @@ struct ContentView: View {
         let note = Note(parent: parent, sortIndex: (siblings.map(\.sortIndex).max() ?? 0) + 1)
         note.pageConfig = Defaults.pageConfig
         note.fullWidth = Defaults.canvasOptions.fullWidth
-        note.smallText = Defaults.canvasOptions.smallText
         context.insert(note)
         parent?.isExpanded = true
         try? context.save()
@@ -196,7 +193,6 @@ struct ContentView: View {
         copy.subtitle = note.subtitle
         copy.showIcon = note.showIcon
         copy.fullWidth = note.fullWidth
-        copy.smallText = note.smallText
         context.insert(copy)
         try? context.save()
         selection = copy.persistentModelID

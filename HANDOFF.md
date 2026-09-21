@@ -15,16 +15,17 @@ Cập nhật: 2026-09-21. Người dùng: Hoàng Sơn (GitHub **OhMySaint**, gõ
 | File | Vai trò |
 | --- | --- |
 | `Editor/DocumentController.swift` | Singleton. Sở hữu `NSTextStorage` + `NSLayoutManager` dùng chung; mọi lệnh định dạng; menu `/`; danh sách; khối; Enter/Tab/Backspace; media; slash panel; lưu (debounce 0,4s) |
-| `Editor/PagedDocumentView.swift` | `PageTextView` (subclass NSTextView), `PageView`, `PagedDocumentView` (canvas), `EditorCanvasView` (host + scroll + zoom), `PagedEditor` (NSViewRepresentable). Hai bố cục: **Liên tục** (1 container, cột theo cửa sổ) và **Trang giấy rời** (nhiều container = nhiều trang) |
+| `Editor/PagedDocumentView.swift` | `PageTextView` (subclass NSTextView), `PageView`, `PagedDocumentView` (canvas), `EditorCanvasView` (host + scroll), `PagedEditor` (NSViewRepresentable). Hai bố cục: **Liên tục** (1 container, cột theo cửa sổ) và **Trang giấy rời** (nhiều container = nhiều trang) |
 | `Editor/DocumentStorage.swift` | Lưu tài liệu = **NSKeyedArchiver không secure coding**; sửa chữa dữ liệu RTFD cũ; làm phẳng khối khi xuất |
 | `Editor/DocumentIO.swift` | Nhập/xuất/in; `ExportHeader` (bìa + tiêu đề trước nội dung) |
 | `Editor/SlashCommand.swift`, `SlashMenuPanel.swift` | Danh mục `/` và panel nổi (NSPanel **không được thành key**) |
+| `Editor/FindInPage.swift`, `Views/FindBar.swift` | Tìm/thay thế trong trang (⌘F, ⌥⌘F, ⌘G, ⇧⌘G, ⌘E): `FindModel` + extension controller; tô sáng bằng **temporary attributes** của layout manager (không đụng tài liệu); menu Tìm thay thế nhóm `.textEditing` của SwiftUI |
 | `Editor/CodeHighlighter.swift` | Tô màu mã regex; `NSTextBlock.isDecoration` |
 | `Editor/MediaSupport.swift`, `MediaToolbar.swift` | YouTube/ảnh/link, cửa sổ xem trong app (WKWebView), thanh nổi khi chọn ảnh |
 | `Editor/AppActions.swift` | Cầu nối menu → ContentView (closure) |
 | `Views/ContentView.swift` | NavigationSplitView; sidebar / dashboard / editor; PageActions; export; link nội bộ |
 | `Views/PageHeaderView.swift` | Đầu trang kiểu Notion (bìa, icon đè mép, tiêu đề, thẻ) — **overlay SwiftUI ngoài scroll view**, đồng bộ cuộn qua `HeaderLayout` |
-| `Views/NoteEditorView.swift` | Toolbar + editor + inspector + thanh trạng thái; overlay đầu trang scale theo zoom |
+| `Views/NoteEditorView.swift` | Toolbar + thanh tìm + editor + inspector + thanh trạng thái; overlay đầu trang dịch theo cuộn |
 | `Views/DashboardView.swift`, `SidebarView.swift`, `TagViews.swift`, `PageInspector.swift`, `SettingsView.swift`, `FormatToolbar.swift`, `ColorPalette.swift`, `CoverControls.swift`, `CoverStyle.swift` | UI |
 | `Models/Note.swift`, `Tag.swift`, `PageConfig.swift` | SwiftData + `Defaults` (UserDefaults) + đơn vị đo |
 
@@ -37,10 +38,10 @@ Luồng lưu: gõ → `textDidChange` → `documentDidChangeFromTyping` (nhẹ) 
 3. **Khối sau khi qua RTF thành bảng 1 cột** → phân biệt bảng thật bằng `numberOfColumns > 1` (`isDecoration`).
 4. **OpenKey** phát phím tổng hợp (keyCode 0, chuỗi backspace+ký tự). Menu `/` bắt Return/Tab/↑↓/Esc ở `keyDown` **và** `doCommandBy` **và** `shouldChangeTextIn` (3 tầng); so cả ký tự lẫn keyCode; `setMarkedText` không phát `textDidChange` nên gọi `updateSlashMenu` trực tiếp.
 5. **Panel nổi chứa NSHostingView có thể giành key window** → subclass `canBecomeKey = false`.
-6. **NSHostingView đặt trong NSScrollView có magnification không nhận click đúng** → đầu trang là overlay ngoài scroll view, dịch theo `scrollOffset`, scale bằng `.scaleEffect(zoom)`. Hosting view tự tạo trong AppKit **không kế thừa environment SwiftUI** (truyền `.modelContainer` tường minh nếu cần).
-7. **`needsLayout` trên NSView thường trong scroll view không đáng tin** → gọi `relayout()` đồng bộ khi đổi zoom/chiều cao đầu trang.
-8. **Zoom kiểu Docs**: bề rộng cột tính từ `contentView.frame` (điểm màn hình, không phụ thuộc zoom) nên zoom không reflow; `magnification = textScale(chữ nhỏ 0,875) × zoom`; doc rộng hơn cửa sổ thì cuộn ngang. Pinch xử lý ở `EditorCanvasView.magnify(with:)`, `allowsMagnification = false`.
-9. Mép cột: mặc định 7,5 % cửa sổ mỗi bên, toàn chiều rộng 3 %. "Toàn chiều rộng" và "Chữ nhỏ" **lưu theo từng trang** (`Note.fullWidth/smallText`), mặc định trong Cài đặt.
+6. **NSHostingView đặt trong NSScrollView không nhận click đúng** → đầu trang là overlay ngoài scroll view, dịch theo `scrollOffset`. Hosting view tự tạo trong AppKit **không kế thừa environment SwiftUI** (truyền `.modelContainer` tường minh nếu cần).
+7. **`needsLayout` trên NSView thường trong scroll view không đáng tin** → gọi `relayout()` đồng bộ khi đổi chiều cao đầu trang.
+8. **Đã bỏ zoom và "Chữ nhỏ" (2026-09-21, theo yêu cầu)**: scroll view luôn magnification 1, không pinch. Chỉ còn một tuỳ chọn bố cục như Notion: "Toàn chiều rộng". Đừng thêm lại zoom. `Note.smallText` vẫn còn trong model chỉ để store cũ mở được, không dùng.
+9. Mép cột: mặc định 7,5 % cửa sổ mỗi bên, toàn chiều rộng 3 %. "Toàn chiều rộng" **lưu theo từng trang** (`Note.fullWidth`), mặc định trong Cài đặt.
 10. Đơn vị: mặc định **inch**, lề 0,75 in; thước kẻ đã gỡ hẳn; đường biên lề/lưới chỉ ở chế độ giấy rời.
 11. Hiệu năng: không dùng `String.count` trên tài liệu lớn; công việc nặng chạy trễ sau loạt phím (0,3 ms/phím ở 35 trang).
 12. `Note.uid` (UUID) cho link nội bộ `bnote://page/<uid>`; migration cho cùng một default cho mọi hàng cũ → `wireCommands` gán lại uid trùng.
@@ -56,7 +57,7 @@ scripts/test.sh thesis     # sinh luận văn 35 trang vào store (thoát app tr
 scripts/test.sh tree       # sinh cây kịch bản
 ```
 
-Harness `ui` in ảnh `bnote-editor*.png` trong `$TMPDIR` để nhìn tận mắt. Trong `ui` có 1 check "cửa sổ chính vẫn là key" luôn FAIL vì harness không activate được app — bỏ qua.
+Harness `ui` in ảnh `bnote-editor*.png`, `bnote-find.png` trong `$TMPDIR` để nhìn tận mắt. Trong `ui` có 1 check "cửa sổ chính vẫn là key" luôn FAIL vì harness không activate được app — bỏ qua. **`ui` chạy từ shell của Claude (không có phiên GUI) sẽ treo ở bước "bấm vào đầu trang"** (vòng tracking chuột của NSTextView chờ mouseUp thật) — chạy nó trong Terminal của app (`mcp__terminal__run_in_terminal`) hoặc chỉ đọc log tới trước bước đó. Harness `editor` không có cửa sổ nên `undoManager` nil — check undo phải đặt ở `keyboard`.
 
 ## 5. Quy ước
 
@@ -68,6 +69,7 @@ Harness `ui` in ảnh `bnote-editor*.png` trong `$TMPDIR` để nhìn tận mắ
 ## 6. Việc còn dở / ý tưởng kế tiếp
 
 - Notarize khi có tài khoản Developer trả phí (nối vào `scripts/package.sh`).
-- Kéo thả sắp xếp trang trong sidebar; tìm kiếm trong trang (⌘F); bảng có chỉnh cột; link preview cho web thường.
+- Kéo thả sắp xếp trang trong sidebar; bảng có chỉnh cột; link preview cho web thường.
+- ⌘F đã xong (tìm/thay thế, Aa, Enter/⇧Enter, Esc chọn kết quả hiện tại). Chưa có: tìm không dấu, tìm toàn bộ workspace.
 - Xuất PDF chưa vẽ nền khối mã (khối chỉ hiện trong layout của app).
 - Khi đổi tên trang qua menu chuột phải, ô sửa hiện tại chỗ (đã bỏ double-click vì làm hỏng click chọn).

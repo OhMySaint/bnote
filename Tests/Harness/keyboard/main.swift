@@ -266,11 +266,6 @@ controller.canvasOptions.fullWidth = true; host.apply(options: controller.canvas
 window.setContentSize(NSSize(width: 1800, height: 800)); host.frame = window.contentView!.bounds; host.layoutSubtreeIfNeeded(); pump()
 check("toàn chiều rộng 1800: mép 3% → cột 1692", host.canvas.contentWidth == 1692, "w=\(host.canvas.contentWidth)")
 controller.canvasOptions.fullWidth = false
-controller.canvasOptions.smallText = true; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
-check("chữ nhỏ: scale 0,875", abs(host.scrollView.magnification - 0.875) < 0.001, "mag=\(host.scrollView.magnification)")
-check("chữ nhỏ: cột nhìn vẫn 1530, chứa nhiều chữ hơn", abs(host.canvas.contentWidth * 0.875 - 1530) < 1.5, "docW=\(host.canvas.contentWidth) visual=\(host.canvas.contentWidth * 0.875)")
-controller.canvasOptions.smallText = false; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
-check("tắt chữ nhỏ về 1:1", abs(host.scrollView.magnification - 1) < 0.001)
 check("chỉ một container, không phân trang", controller.layoutManager.textContainers.count == 1 && controller.pageCount == 1)
 controller.canvasOptions.fullWidth = false
 controller.canvasOptions.continuous = false; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
@@ -493,7 +488,7 @@ check("danh sách vẫn tiếp tục", controller.textStorage.string.hasSuffix("
 tvR = freshLine(); typeText(tvR, "``` code"); tvR.keyDown(with: key(36, "\r")); pump()
 check("khối mã vẫn tiếp tục", controller.isCodeParagraph(at: controller.textStorage.length))
 
-print("== hai tuỳ chọn kiểu Notion: mép theo %, chữ nhỏ không cuộn ngang ==")
+print("== tuỳ chọn kiểu Notion: mép theo %, không cuộn ngang ==")
 controller.load(data: nil, plainText: String(repeating: "chữ ", count: 400), config: PageConfig()); pump()
 controller.canvasOptions = Defaults.canvasOptions
 host.apply(options: controller.canvasOptions)
@@ -503,12 +498,22 @@ check("mặc định: mép 7,5% (75pt) → cột 850", colW == 850 && abs(host.c
 controller.canvasOptions.fullWidth = true; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
 check("toàn rộng: mép 3% (30pt) → cột 940", host.canvas.contentWidth == 940, "w=\(host.canvas.contentWidth)")
 controller.canvasOptions.fullWidth = false; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
-controller.canvasOptions.smallText = true; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
-check("chữ nhỏ: magnification 0,875", abs(host.scrollView.magnification - 0.875) < 0.001)
-check("chữ nhỏ: tài liệu vừa khít cửa sổ, không cuộn ngang", abs(host.canvas.frame.width * 0.875 - 1000) < 1.5, "docW=\(host.canvas.frame.width)")
-check("chữ nhỏ: cột nhìn vẫn 850", abs(host.canvas.contentWidth * 0.875 - 850) < 1.5, "docW=\(host.canvas.contentWidth)")
-check("chỉ còn hai mức: 1 và 0,875", CanvasOptions.smallTextScale == 0.875 && CanvasOptions().magnification == 1)
-controller.canvasOptions.smallText = false; host.apply(options: controller.canvasOptions); pump()
+check("tài liệu vừa khít cửa sổ, không cuộn ngang", abs(host.canvas.frame.width - 1000) < 1.5, "docW=\(host.canvas.frame.width)")
+check("không bao giờ scale", abs(host.scrollView.magnification - 1) < 0.001)
+
+print("== tìm & thay thế: undo qua cửa sổ ==")
+controller.load(data: nil, plainText: "một hai một ba", config: PageConfig()); pump()
+window.makeFirstResponder(controller.activeTextView)
+controller.showFind(replace: true); pump()
+controller.find.query = "một"; controller.findQueryChanged()
+controller.find.replacement = "1"
+controller.replaceAllMatches(); pump()
+check("Thay tất cả qua cửa sổ", controller.textStorage.string == "1 hai 1 ba", "text=\(controller.textStorage.string)")
+controller.activeTextView?.undoManager?.undo(); pump()
+check("Undo hoàn lại thay tất cả một lần", controller.textStorage.string == "một hai một ba", "text=\(controller.textStorage.string)")
+check("sau undo kết quả được tìm lại", controller.find.matches.count == 2, "got \(controller.find.matches.count)")
+controller.hideFind(); pump()
+check("đóng thanh: editor lấy lại focus", window.firstResponder is PageTextView)
 
 print(failures.isEmpty ? "\nTẤT CẢ ĐỀU ĐẠT" : "\nTHẤT BẠI (\(failures.count)): \(failures.joined(separator: " | "))")
 exit(failures.isEmpty ? 0 : 1)

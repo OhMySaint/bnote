@@ -118,9 +118,7 @@ struct PageSetupPanel: View {
                 section("Bố cục trang này") {
                     Toggle("Toàn chiều rộng", isOn: optionBinding(\.fullWidth))
                         .disabled(!controller.canvasOptions.continuous)
-                    Toggle("Chữ nhỏ", isOn: optionBinding(\.smallText))
-                        .disabled(!controller.canvasOptions.continuous)
-                    Text("Cột đọc rộng tối đa 900pt canh giữa; toàn chiều rộng giãn sát hai mép. Lưu riêng cho từng trang.")
+                    Text("Cột đọc canh giữa với mép 7,5 % cửa sổ; toàn chiều rộng giãn sát hai mép. Lưu riêng cho từng trang.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)

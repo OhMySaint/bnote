@@ -467,6 +467,40 @@ if let rep = canvas.bitmapImageRepForCachingDisplay(in: canvas.bounds) {
 }
 
 print("")
+print("== tìm & thay thế trong trang ==")
+controller.load(data: nil, plainText: "Hà Nội mùa thu. hà nội mùa đông.\nSài Gòn nắng.", config: PageConfig())
+canvas.updatePagination()
+controller.showFind()
+check("thanh tìm mở", controller.find.isVisible)
+controller.find.query = "hà nội"; controller.findQueryChanged()
+check("không phân biệt hoa thường: 2 kết quả", controller.find.matches.count == 2, "got \(controller.find.matches.count)")
+check("kết quả đầu là 'Hà Nội' ở đầu", controller.find.matches.first == NSRange(location: 0, length: 6), "got \(String(describing: controller.find.matches.first))")
+check("kết quả hiện tại được tô cam", (controller.layoutManager.temporaryAttribute(.backgroundColor, atCharacterIndex: 0, effectiveRange: nil) as? NSColor) != nil)
+check("đang tìm: không đổi vùng chọn (giữ màu cam)", controller.activeTextView?.selectedRange().length == 0, "sel=\(String(describing: controller.activeTextView?.selectedRange()))")
+controller.findNext()
+check("⌘G sang kết quả 2/2", controller.find.current == 1 && controller.find.summary == "2/2", "summary=\(controller.find.summary)")
+controller.findNext()
+check("⌘G quay vòng về 1/2", controller.find.current == 0)
+controller.find.caseSensitive = true; controller.findQueryChanged()
+check("phân biệt hoa thường: 1 kết quả", controller.find.matches.count == 1 && controller.find.matches.first?.location == 16, "got \(controller.find.matches)")
+controller.find.caseSensitive = false; controller.findQueryChanged()
+check("đổi tuỳ chọn: kết quả hiện tại là cái đầu tiên sau con trỏ", controller.find.current == 0)
+controller.find.replacement = "Huế"
+controller.replaceCurrentMatch()
+check("Thay: đổi kết quả hiện tại", controller.textStorage.string.hasPrefix("Huế mùa thu. hà nội mùa đông."), "text=\(controller.textStorage.string.replacingOccurrences(of: "\n", with: "⏎"))")
+check("Thay: còn 1 kết quả, chuyển tới nó", controller.find.matches.count == 1 && controller.find.current == 0)
+controller.find.query = "mùa"; controller.findQueryChanged()
+controller.find.replacement = "tiết"
+controller.replaceAllMatches()
+check("Thay tất cả", controller.textStorage.string == "Huế tiết thu. hà nội tiết đông.\nSài Gòn nắng.", "text=\(controller.textStorage.string.replacingOccurrences(of: "\n", with: "⏎"))")
+check("Thay tất cả: không còn kết quả", controller.find.matches.isEmpty && controller.find.summary == "Không thấy")
+controller.find.query = ""; controller.findQueryChanged()
+check("chuỗi rỗng: không kết quả, không tóm tắt", controller.find.matches.isEmpty && controller.find.summary.isEmpty)
+controller.find.query = "Sài"; controller.findQueryChanged()
+controller.hideFind()
+check("đóng thanh: xoá tô sáng", !controller.find.isVisible && controller.layoutManager.temporaryAttribute(.backgroundColor, atCharacterIndex: 0, effectiveRange: nil) == nil)
+check("đóng thanh: chọn kết quả hiện tại", controller.activeTextView?.selectedRange() == NSRange(location: 32, length: 3), "sel=\(String(describing: controller.activeTextView?.selectedRange()))")
+
 if failures.isEmpty {
     print("TẤT CẢ ĐỀU ĐẠT")
 } else {

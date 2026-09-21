@@ -54,6 +54,24 @@ struct BNoteCommands: Commands {
                 .keyboardShortcut("p", modifiers: [.command, .shift])
         }
 
+        // Replaces the stock Find submenu so ⌘F / ⌘G drive the in-page bar
+        // whatever has focus.
+        CommandGroup(replacing: .textEditing) {
+            Menu("Tìm") {
+                Button("Tìm trong trang…") { controller.showFind() }
+                    .keyboardShortcut("f", modifiers: .command)
+                Button("Tìm và thay thế…") { controller.showFind(replace: true) }
+                    .keyboardShortcut("f", modifiers: [.command, .option])
+                Divider()
+                Button("Kết quả sau") { controller.findNext() }
+                    .keyboardShortcut("g", modifiers: .command)
+                Button("Kết quả trước") { controller.findPrevious() }
+                    .keyboardShortcut("g", modifiers: [.command, .shift])
+                Button("Dùng vùng chọn để tìm") { controller.useSelectionForFind() }
+                    .keyboardShortcut("e", modifiers: .command)
+            }
+        }
+
         CommandGroup(replacing: .printItem) {
             Button("In…") { actions.printDocument?() }
                 .keyboardShortcut("p", modifiers: .command)
@@ -125,8 +143,6 @@ struct BNoteCommands: Commands {
             Button("Quản lý thẻ…") { actions.manageTags?() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()
-            Toggle("Chữ nhỏ", isOn: $controller.canvasOptions.smallText)
-                .keyboardShortcut("-", modifiers: [.command, .shift])
             Toggle("Lưới ô vuông", isOn: $controller.canvasOptions.showGrid)
                 .keyboardShortcut("g", modifiers: [.command, .control])
             Toggle("Đường biên lề", isOn: $controller.canvasOptions.showMarginGuides)

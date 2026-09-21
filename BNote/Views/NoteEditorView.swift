@@ -11,6 +11,7 @@ struct NoteEditorView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Tag.name) private var tags: [Tag]
     @ObservedObject private var headerLayout = DocumentController.shared.headerLayout
+    @ObservedObject private var find = DocumentController.shared.find
 
     /// The Notion-style header is a SwiftUI overlay above the canvas, scrolled
     /// in step with it, so it stays crisp and fully interactive.
@@ -36,6 +37,10 @@ struct NoteEditorView: View {
         VStack(spacing: 0) {
             FormatToolbar(controller: controller)
             Divider()
+            if find.isVisible {
+                FindBar(controller: controller, model: find)
+                Divider()
+            }
             HStack(spacing: 0) {
                 editorWithHeader
                 if showInspector {
@@ -98,18 +103,12 @@ struct NoteEditorView: View {
         .animation(.easeInOut(duration: 0.2), value: controller.hasUnsavedChanges)
     }
 
-    /// Notion's two page options: "Small text" and "Full width", as switches.
+    /// Notion's page option "Full width", as a switch.
     private var layoutToggles: some View {
-        HStack(spacing: 14) {
-            Toggle(isOn: $controller.canvasOptions.smallText) {
-                Label("Chữ nhỏ", systemImage: "textformat.size.smaller")
-            }
-            .help("Chữ nhỏ: cả trang hiển thị nhỏ hơn một nấc (⇧⌘−)")
-            Toggle(isOn: $controller.canvasOptions.fullWidth) {
-                Label("Toàn chiều rộng", systemImage: "arrow.left.and.right")
-            }
-            .help("Toàn chiều rộng: cột chữ giãn sát hai mép (⇧⌘\\)")
+        Toggle(isOn: $controller.canvasOptions.fullWidth) {
+            Label("Toàn chiều rộng", systemImage: "arrow.left.and.right")
         }
+        .help("Toàn chiều rộng: cột chữ giãn sát hai mép (⇧⌘\\)")
         .toggleStyle(.switch)
         .controlSize(.mini)
         .disabled(!controller.canvasOptions.continuous)
