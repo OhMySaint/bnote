@@ -28,6 +28,7 @@ final class DocumentController: NSObject, ObservableObject {
     @Published private(set) var outline: [OutlineItem] = []
     @Published private(set) var wordCount = 0
     @Published private(set) var characterCount = 0
+    @Published private(set) var hasUnsavedChanges = false
     @Published var format = FormatState()
     @Published var config = PageConfig() {
         didSet {
@@ -146,10 +147,12 @@ final class DocumentController: NSObject, ObservableObject {
 
     private func scheduleSave() {
         saveWork?.cancel()
+        if onSave != nil { hasUnsavedChanges = true }
         let work = DispatchWorkItem { [weak self] in
             guard let self, let onSave else { return }
             let snap = snapshot()
             onSave(snap.data, snap.plainText)
+            hasUnsavedChanges = false
         }
         saveWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
@@ -160,6 +163,7 @@ final class DocumentController: NSObject, ObservableObject {
         guard let onSave else { return }
         let snap = snapshot()
         onSave(snap.data, snap.plainText)
+        hasUnsavedChanges = false
     }
 
     private func refreshDerivedState() {

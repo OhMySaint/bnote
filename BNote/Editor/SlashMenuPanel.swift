@@ -11,6 +11,14 @@ private final class NonKeyPanel: NSPanel {
 /// Floating list shown next to the caret while the "/" menu is active. It never
 /// takes key focus, so typing keeps filtering the list in the text view.
 final class SlashMenuPanel {
+    private enum Metrics {
+        static let width: CGFloat = 300
+        static let row: CGFloat = 40
+        static let header: CGFloat = 22
+        static let padding: CGFloat = 12
+        static let maxHeight: CGFloat = 340
+    }
+
     private var panel: NSPanel?
     private let model: SlashMenuModel
 
@@ -57,14 +65,16 @@ final class SlashMenuPanel {
     }
 
     private func preferredSize() -> NSSize {
-        let rows = min(max(model.commands.count, 1), 7)
-        return NSSize(width: 292, height: CGFloat(rows) * 40 + 14)
+        let rows = max(model.commands.count, 1)
+        let headers = Set(model.commands.map(\.section)).count
+        let height = CGFloat(rows) * Metrics.row + CGFloat(headers) * Metrics.header + Metrics.padding
+        return NSSize(width: Metrics.width, height: min(height, Metrics.maxHeight))
     }
 
     private func existingPanel() -> NSPanel {
         if let panel { return panel }
         let panel = NonKeyPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 292, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: Metrics.width, height: 300),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -84,14 +94,34 @@ final class SlashMenuPanel {
 struct SlashMenuView: View {
     @ObservedObject var model: SlashMenuModel
 
+    private var grouped: [(section: String, items: [(index: Int, command: SlashCommand)])] {
+        var result: [(String, [(Int, SlashCommand)])] = []
+        for (index, command) in model.commands.enumerated() {
+            if let last = result.indices.last, result[last].0 == command.section {
+                result[last].1.append((index, command))
+            } else {
+                result.append((command.section, [(index, command)]))
+            }
+        }
+        return result.map { (section: $0.0, items: $0.1.map { (index: $0.0, command: $0.1) }) }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 1) {
-                    ForEach(Array(model.commands.enumerated()), id: \.element.id) { index, command in
-                        row(command, isSelected: index == model.selection)
-                            .id(command.id)
-                            .onTapGesture { model.onPick?(command) }
+                    ForEach(grouped, id: \.section) { group in
+                        Text(group.section)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 9)
+                            .padding(.top, 6)
+                            .padding(.bottom, 2)
+                        ForEach(group.items, id: \.command.id) { item in
+                            row(item.command, isSelected: item.index == model.selection)
+                                .id(item.command.id)
+                                .onTapGesture { model.onPick?(item.command) }
+                        }
                     }
                 }
                 .padding(6)
@@ -113,7 +143,10 @@ struct SlashMenuView: View {
             Image(systemName: command.symbol)
                 .font(.system(size: 13))
                 .frame(width: 26, height: 26)
-                .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 5))
+                .background(
+                    isSelected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06),
+                    in: .rect(cornerRadius: 6)
+                )
             VStack(alignment: .leading, spacing: 1) {
                 Text(command.title)
                     .font(.system(size: 12.5, weight: .medium))
@@ -123,11 +156,16 @@ struct SlashMenuView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            if isSelected {
+                Text("↩")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
         .frame(height: 38)
-        .background(isSelected ? Color.accentColor.opacity(0.22) : .clear, in: .rect(cornerRadius: 6))
+        .background(isSelected ? Color.accentColor.opacity(0.16) : .clear, in: .rect(cornerRadius: 6))
         .contentShape(.rect)
     }
 }

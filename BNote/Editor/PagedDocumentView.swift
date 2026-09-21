@@ -38,6 +38,22 @@ final class PageTextView: NSTextView {
         }
         super.mouseDown(with: event)
     }
+
+    /// Shown on the first page while the document is empty.
+    var placeholder: String?
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let placeholder,
+              textStorage?.length == 0,
+              layoutManager?.textContainers.first === textContainer
+        else { return }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: EditorDefaults.bodyFont,
+            .foregroundColor: NSColor.placeholderTextColor,
+        ]
+        (placeholder as NSString).draw(at: NSPoint(x: 0, y: 1), withAttributes: attributes)
+    }
 }
 
 /// One white sheet: paper, optional grid, margin guides, and the text box.
@@ -182,6 +198,7 @@ final class PagedDocumentView: NSView {
         textView.isContinuousSpellCheckingEnabled = false
         textView.delegate = controller
         textView.typingAttributes = EditorDefaults.bodyAttributes
+        textView.placeholder = "Bắt đầu viết, hoặc gõ / để chèn khối…"
         return textView
     }
 
@@ -288,12 +305,34 @@ final class PagedDocumentView: NSView {
         if frame.size != newSize {
             setFrameSize(newSize)
         }
+        pages.first?.textView.needsDisplay = true
+        needsDisplay = true
         NotificationCenter.default.post(name: .canvasGeometryChanged, object: self)
     }
 
     override func layout() {
         super.layout()
         layoutPages()
+    }
+
+    /// Page numbers in the gap under each sheet.
+    override func draw(_ dirtyRect: NSRect) {
+        guard pages.count > 1 else { return }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+            .foregroundColor: NSColor.tertiaryLabelColor,
+        ]
+        for page in pages {
+            let label = "\(page.pageNumber) / \(pages.count)" as NSString
+            let size = label.size(withAttributes: attributes)
+            let origin = NSPoint(
+                x: page.frame.midX - size.width / 2,
+                y: page.frame.maxY + (Metrics.gap - size.height) / 2
+            )
+            if dirtyRect.intersects(NSRect(origin: origin, size: size)) {
+                label.draw(at: origin, withAttributes: attributes)
+            }
+        }
     }
 
     func scroll(toCharacterIndex index: Int) {

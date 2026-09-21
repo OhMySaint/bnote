@@ -12,6 +12,8 @@ struct ContentView: View {
     @State private var activeTag: String?
     @State private var showInspector = true
     @State private var inspectorTab = InspectorTab.outline
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
+    @State private var inspectorBeforeFocus = true
     @State private var pendingDeletion: Note?
     @State private var errorMessage: String?
 
@@ -29,10 +31,11 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(
                 roots: roots,
                 allTags: allTags,
+                totalPages: notes.count,
                 selection: $selection,
                 search: $search,
                 activeTag: $activeTag,
@@ -59,11 +62,14 @@ struct ContentView: View {
                     inspectorTab: $inspectorTab
                 )
             } else {
-                ContentUnavailableView(
-                    "Chưa chọn trang",
-                    systemImage: "doc.text",
-                    description: Text("Chọn một trang bên trái, hoặc nhấn ⌘N để tạo trang mới.")
-                )
+                ContentUnavailableView {
+                    Label("Chưa chọn trang", systemImage: "doc.text")
+                } description: {
+                    Text("Chọn một trang bên trái, hoặc tạo trang mới để bắt đầu viết.")
+                } actions: {
+                    Button("Trang mới") { addPage(parent: nil) }
+                        .buttonStyle(.borderedProminent)
+                }
             }
         }
         .navigationTitle(selectedNote?.displayTitle ?? "BNote")
@@ -216,6 +222,18 @@ struct ContentView: View {
         actions.showPageSetup = {
             inspectorTab = .page
             showInspector = true
+        }
+        actions.toggleFocusMode = {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if columnVisibility == .detailOnly {
+                    columnVisibility = .all
+                    showInspector = inspectorBeforeFocus
+                } else {
+                    inspectorBeforeFocus = showInspector
+                    columnVisibility = .detailOnly
+                    showInspector = false
+                }
+            }
         }
         actions.printDocument = {
             controller.saveNow()

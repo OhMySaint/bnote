@@ -16,37 +16,32 @@ struct FormatToolbar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                group { styleMenu }
-                group {
+            HStack(spacing: 8) {
+                ToolGroup { styleMenu }
+                ToolGroup {
                     fontMenu
                     sizeControls
                 }
-                group { traitButtons }
-                group { colorControls }
-                group { alignmentButtons }
-                group {
+                ToolGroup { traitButtons }
+                ToolGroup { colorControls }
+                ToolGroup { alignmentButtons }
+                ToolGroup {
                     listButtons
+                    Divider().frame(height: 14)
                     indentButtons
                     lineSpacingMenu
                 }
-                group { insertMenu }
+                ToolGroup { insertMenu }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
+        .frame(height: 42)
         .background(.bar)
         .onChange(of: controller.format.fontSize) { _, size in
             sizeText = size == size.rounded() ? "\(Int(size))" : String(format: "%.1f", size)
         }
         .onAppear { sizeText = "\(Int(controller.format.fontSize))" }
-    }
-
-    /// One cluster of related controls, separated by a hairline.
-    @ViewBuilder
-    private func group(@ViewBuilder content: () -> some View) -> some View {
-        HStack(spacing: 4) { content() }
-        Divider().frame(height: 18)
     }
 
     // MARK: - Controls
@@ -63,7 +58,7 @@ struct FormatToolbar: View {
             }
         } label: {
             Text(controller.format.style.label)
-                .frame(width: 86, alignment: .leading)
+                .frame(width: 84, alignment: .leading)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -85,7 +80,7 @@ struct FormatToolbar: View {
         } label: {
             Text(controller.format.fontFamily)
                 .lineLimit(1)
-                .frame(width: 112, alignment: .leading)
+                .frame(width: 108, alignment: .leading)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -93,40 +88,38 @@ struct FormatToolbar: View {
     }
 
     private var sizeControls: some View {
-        HStack(spacing: 1) {
-            Button { controller.nudgeFontSize(by: -1) } label: { Image(systemName: "minus") }
-                .buttonStyle(.borderless)
-                .help("Giảm cỡ chữ (⌘−)")
-
+        HStack(spacing: 0) {
+            ToolButton(icon: "minus", isOn: false, help: "Giảm cỡ chữ (⌘−)") {
+                controller.nudgeFontSize(by: -1)
+            }
             TextField("", text: $sizeText)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 40)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12).monospacedDigit())
                 .multilineTextAlignment(.center)
+                .frame(width: 30)
                 .onSubmit {
                     if let value = Double(sizeText.replacingOccurrences(of: ",", with: ".")) {
                         controller.setFontSize(CGFloat(value))
                     }
                 }
-
             Menu {
                 ForEach(Self.sizes, id: \.self) { size in
                     Button("\(Int(size))") { controller.setFontSize(size) }
                 }
             } label: {
-                Image(systemName: "chevron.down").font(.system(size: 8))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-
-            Button { controller.nudgeFontSize(by: 1) } label: { Image(systemName: "plus") }
-                .buttonStyle(.borderless)
-                .help("Tăng cỡ chữ (⌘+)")
+            ToolButton(icon: "plus", isOn: false, help: "Tăng cỡ chữ (⌘+)") {
+                controller.nudgeFontSize(by: 1)
+            }
         }
     }
 
     private var traitButtons: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 1) {
             ToolButton(icon: "bold", isOn: controller.format.bold, help: "Đậm (⌘B)") {
                 controller.toggleTrait(.boldFontMask)
             }
@@ -151,12 +144,10 @@ struct FormatToolbar: View {
                 .labelsHidden()
                 .onChange(of: textColor) { _, color in controller.setTextColor(NSColor(color)) }
                 .help("Màu chữ")
-
             ColorPicker(selection: $highlightColor, supportsOpacity: false) { EmptyView() }
                 .labelsHidden()
                 .onChange(of: highlightColor) { _, color in controller.setHighlight(NSColor(color)) }
                 .help("Màu nền chữ")
-
             ToolButton(icon: "paintbrush", isOn: false, help: "Bỏ màu nền") {
                 controller.setHighlight(nil)
             }
@@ -164,7 +155,7 @@ struct FormatToolbar: View {
     }
 
     private var alignmentButtons: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 1) {
             ToolButton(icon: "text.alignleft", isOn: controller.format.alignment == .left, help: "Canh trái (⇧⌘L)") {
                 controller.setAlignment(.left)
             }
@@ -181,7 +172,7 @@ struct FormatToolbar: View {
     }
 
     private var listButtons: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 1) {
             ToolButton(icon: "list.bullet", isOn: controller.format.list == .bullet, help: "Danh sách chấm (⇧⌘8)") {
                 controller.toggleList(.bullet)
             }
@@ -195,7 +186,7 @@ struct FormatToolbar: View {
     }
 
     private var indentButtons: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 1) {
             ToolButton(icon: "decrease.indent", isOn: false, help: "Giảm thụt lề (⌘[)") {
                 controller.changeIndent(by: -EditorDefaults.tabIndent)
             }
@@ -208,7 +199,12 @@ struct FormatToolbar: View {
     private var lineSpacingMenu: some View {
         Menu {
             ForEach([1.0, 1.15, 1.5, 2.0], id: \.self) { value in
-                Button(String(format: "%.2g", value)) { controller.setLineHeight(CGFloat(value)) }
+                Button {
+                    controller.setLineHeight(CGFloat(value))
+                } label: {
+                    Text(String(format: "%.2g", value))
+                    if abs(controller.format.lineHeight - value) < 0.01 { Image(systemName: "checkmark") }
+                }
             }
         } label: {
             Image(systemName: "arrow.up.and.down.text.horizontal")
@@ -222,14 +218,30 @@ struct FormatToolbar: View {
     private var insertMenu: some View {
         Menu {
             ForEach(SlashCatalog.all) { command in
-                Button(command.title) { command.perform(controller) }
+                Button {
+                    command.perform(controller)
+                } label: {
+                    Label(command.title, systemImage: command.symbol)
+                }
             }
         } label: {
-            Label("Chèn", systemImage: "plus.square.on.square")
+            Label("Chèn", systemImage: "plus")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("Chèn khối — hoặc gõ / trong tài liệu")
+    }
+}
+
+/// A cluster of related controls on a soft rounded backdrop.
+private struct ToolGroup<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 2) { content() }
+            .padding(.horizontal, 5)
+            .frame(height: 28)
+            .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 7))
     }
 }
 
@@ -239,13 +251,24 @@ private struct ToolButton: View {
     let help: String
     let action: () -> Void
 
+    @State private var hovering = false
+
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .frame(width: 22, height: 20)
-                .background(isOn ? Color.accentColor.opacity(0.22) : .clear, in: .rect(cornerRadius: 4))
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 24, height: 22)
+                .foregroundStyle(isOn ? Color.accentColor : .primary)
+                .background(background, in: .rect(cornerRadius: 5))
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
         .help(help)
+    }
+
+    private var background: Color {
+        if isOn { return Color.accentColor.opacity(0.18) }
+        if hovering { return Color.primary.opacity(0.08) }
+        return .clear
     }
 }

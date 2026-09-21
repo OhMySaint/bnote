@@ -50,6 +50,7 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 | ⌘] ⌘[ | Tăng / giảm thụt lề |
 | ⇧⌘I | Nhập tài liệu |
 | ⌃⌘O | Ẩn/hiện bảng bên phải |
+| ⌃⌘F | Chế độ tập trung (ẩn cả hai bên) |
 | ⇧⌘P | Mở thiết lập trang |
 | ⌃⌘R / ⌃⌘G | Thước kẻ / lưới ô vuông |
 | ⌘0 | Về cỡ thật 100% |

@@ -13,6 +13,7 @@ final class AppActions {
     var export: ((DocumentFormat) -> Void)?
     var toggleOutline: (() -> Void)?
     var showPageSetup: (() -> Void)?
+    var toggleFocusMode: (() -> Void)?
     var printDocument: (() -> Void)?
 }
 
@@ -24,6 +25,7 @@ struct BNoteApp: App {
         }
         .modelContainer(for: Note.self)
         .defaultSize(width: 1180, height: 820)
+        .windowToolbarStyle(.unified)
         .commands { BNoteCommands() }
     }
 }
@@ -114,6 +116,8 @@ struct BNoteCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .control])
             Button("Thiết lập trang…") { actions.showPageSetup?() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+            Button("Chế độ tập trung") { actions.toggleFocusMode?() }
+                .keyboardShortcut("f", modifiers: [.command, .control])
             Divider()
             Button("Thước kẻ") { controller.canvasOptions.showRuler.toggle() }
                 .keyboardShortcut("r", modifiers: [.command, .control])

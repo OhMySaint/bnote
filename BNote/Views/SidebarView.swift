@@ -5,6 +5,7 @@ import SwiftUI
 struct SidebarView: View {
     let roots: [Note]
     let allTags: [String]
+    let totalPages: Int
     @Binding var selection: PersistentIdentifier?
     @Binding var search: String
     @Binding var activeTag: String?
@@ -14,45 +15,81 @@ struct SidebarView: View {
     var onDuplicate: (Note) -> Void
 
     var body: some View {
-        List(selection: $selection) {
-            Section("Trang") {
-                ForEach(roots) { note in
-                    PageRow(
-                        note: note,
-                        onAddPage: onAddPage,
-                        onDelete: onDelete,
-                        onDuplicate: onDuplicate
-                    )
+        VStack(spacing: 0) {
+            List(selection: $selection) {
+                Section("Trang") {
+                    ForEach(roots) { note in
+                        PageRow(
+                            note: note,
+                            onAddPage: onAddPage,
+                            onDelete: onDelete,
+                            onDuplicate: onDuplicate
+                        )
+                    }
                 }
-            }
 
-            if !allTags.isEmpty {
-                Section("Thẻ") {
-                    ForEach(allTags, id: \.self) { tag in
-                        HStack(spacing: 6) {
-                            Image(systemName: activeTag == tag ? "tag.fill" : "tag")
-                            Text(tag)
-                            Spacer()
-                        }
-                        .foregroundStyle(activeTag == tag ? Color.accentColor : .primary)
-                        .contentShape(.rect)
-                        .onTapGesture {
-                            activeTag = activeTag == tag ? nil : tag
+                if !allTags.isEmpty {
+                    Section("Thẻ") {
+                        ForEach(allTags, id: \.self) { tag in
+                            HStack(spacing: 6) {
+                                Image(systemName: activeTag == tag ? "tag.fill" : "tag")
+                                Text(tag)
+                                Spacer()
+                                if activeTag == tag {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .foregroundStyle(activeTag == tag ? Color.accentColor : .primary)
+                            .contentShape(.rect)
+                            .onTapGesture {
+                                activeTag = activeTag == tag ? nil : tag
+                            }
                         }
                     }
                 }
             }
+            .overlay {
+                if roots.isEmpty {
+                    if search.isEmpty && activeTag == nil {
+                        ContentUnavailableView {
+                            Label("Chưa có trang", systemImage: "doc.text")
+                        } description: {
+                            Text("Mỗi trang là một tài liệu, có thể lồng trang con bên trong.")
+                        } actions: {
+                            Button("Tạo trang đầu tiên") { onAddPage(nil) }
+                                .buttonStyle(.borderedProminent)
+                        }
+                    } else {
+                        ContentUnavailableView.search(text: search.isEmpty ? (activeTag ?? "") : search)
+                    }
+                }
+            }
+
+            Divider()
+            footer
         }
         .searchable(text: $search, placement: .sidebar, prompt: "Tìm trong mọi trang")
         .navigationSplitViewColumnWidth(min: 220, ideal: 260)
-        .overlay {
-            if roots.isEmpty {
-                ContentUnavailableView(
-                    search.isEmpty ? "Chưa có trang" : "Không tìm thấy",
-                    systemImage: search.isEmpty ? "doc.text" : "magnifyingglass"
-                )
+    }
+
+    private var footer: some View {
+        HStack {
+            Button {
+                onAddPage(nil)
+            } label: {
+                Label("Trang mới", systemImage: "plus")
+                    .font(.callout)
             }
+            .buttonStyle(.borderless)
+            .help("Trang mới (⌘N)")
+            Spacer()
+            Text("\(totalPages) trang")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 }
 
@@ -61,6 +98,8 @@ private struct PageRow: View {
     var onAddPage: (Note?) -> Void
     var onDelete: (Note) -> Void
     var onDuplicate: (Note) -> Void
+
+    @State private var hovering = false
 
     var body: some View {
         Group {
@@ -90,7 +129,7 @@ private struct PageRow: View {
     }
 
     private var label: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 7) {
             Text(note.icon)
             VStack(alignment: .leading, spacing: 1) {
                 Text(note.displayTitle)
@@ -102,6 +141,22 @@ private struct PageRow: View {
                         .lineLimit(1)
                 }
             }
+            Spacer(minLength: 4)
+            if hovering {
+                Button {
+                    onAddPage(note)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .frame(width: 18, height: 18)
+                        .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 4))
+                }
+                .buttonStyle(.plain)
+                .help("Thêm trang con")
+            }
         }
+        .padding(.vertical, 1)
+        .contentShape(.rect)
+        .onHover { hovering = $0 }
     }
 }
