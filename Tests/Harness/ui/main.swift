@@ -143,6 +143,16 @@ check("ô tìm hiển thị với chuỗi", findTextField()?.stringValue == "hà
 controller.hideFind(); pump(0.3)
 check("đóng thanh: ô tìm biến mất", findTextField() == nil)
 
+print("== toàn chiều rộng: đầu trang đổi cùng frame với cột chữ ==")
+if let host = canvasHost() {
+    for on in [true, false] {
+        controller.canvasOptions.fullWidth = on
+        let l = controller.headerLayout
+        check("\(on ? "bật" : "tắt"): tiêu đề thẳng cột ngay lập tức, không đợi runloop", abs(l.leading - host.canvas.contentLeading) < 1 && abs(l.width - host.canvas.contentWidth) < 1, "header=\(l.leading)/\(l.width) cột=\(host.canvas.contentLeading)/\(host.canvas.contentWidth)")
+        pump(0.2)
+    }
+}
+
 print("== bấm vào đầu trang ở hai bố cục ==")
 MainActor.assumeIsolated { note.coverData = nil; note.coverStyle = ""; note.tags = []; note.title = "hv" }
 controller.load(data: nil, plainText: "fsdfs", config: PageConfig()); pump(0.5)

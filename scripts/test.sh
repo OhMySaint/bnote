@@ -7,6 +7,7 @@
 #   scripts/test.sh thesis     # generate the 35-page thesis into the app's store
 #   scripts/test.sh screenplay # generate the 24-page screenplay
 #   scripts/test.sh tree       # generate the screenplay as a page tree
+#   scripts/test.sh perf       # trace column vs header geometry after toggling full width
 set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT="${TMPDIR:-/tmp}/bnote-harness"
@@ -32,6 +33,7 @@ case "${1:-all}" in
   all)        run editor "${CORE[@]}"; run keyboard "${CORE[@]}"; run ui "${UI[@]}" ;;
   editor|keyboard) run "$1" "${CORE[@]}" ;;
   ui)         run ui "${UI[@]}" ;;
+  perf)       run perf "${UI[@]}" ;;   # đo thời gian/độ trễ bật Toàn chiều rộng, không assert
   thesis|screenplay|tree)
     echo "Ghi vào store của app — thoát BNote trước."; pkill -x BNote || true; sleep 1
     run "$1" BNote/Models/*.swift BNote/Editor/*.swift BNote/Views/PageHeaderView.swift BNote/Views/CoverStyle.swift BNote/Views/TagViews.swift ;;

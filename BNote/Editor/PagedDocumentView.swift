@@ -662,8 +662,16 @@ final class PagedDocumentView: NSView {
     /// Notion layout: text at its natural size in a centred column whose width
     /// follows the window up to the reading width (or the whole window when
     /// "full width" is on). Nothing is scaled and nothing is paginated.
+    #if DEBUG
+    /// Harness instrumentation: how often the column is re-laid out.
+    static var continuousLayoutCount = 0
+    #endif
+
     private func layoutContinuousColumn() {
         guard let page = pages.first, let layoutManager else { return }
+        #if DEBUG
+        Self.continuousLayoutCount += 1
+        #endif
         let scrollView = enclosingScrollView
         // Window size in screen points.
         let windowWidth = scrollView?.contentView.frame.width ?? bounds.width
@@ -845,7 +853,13 @@ final class EditorCanvasView: NSView {
         publishHeaderLayout()
     }
 
-    /// Where the header overlay (outside the scroll view) should sit.
+    /// True while SwiftUI is inside `updateNSView`; publishing to the header
+    /// model then must wait a turn, otherwise it lands in the same frame.
+    var isInsideViewUpdate = false
+
+    /// Where the header overlay (outside the scroll view) should sit. Applied
+    /// synchronously so the title moves in the very frame the column does —
+    /// a one-turn delay reads as a stutter when toggling full width.
     private func publishHeaderLayout() {
         guard let layout = controller?.headerLayout else { return }
         let clip = scrollView.contentView.bounds.origin
@@ -854,10 +868,15 @@ final class EditorCanvasView: NSView {
         let scrollOffset = clip.y
         guard abs(layout.leading - leading) > 0.5 || abs(layout.width - width) > 0.5
             || abs(layout.scrollOffset - scrollOffset) > 0.5 else { return }
-        DispatchQueue.main.async {
+        let apply = {
             layout.leading = leading
             layout.width = width
             layout.scrollOffset = scrollOffset
+        }
+        if isInsideViewUpdate {
+            DispatchQueue.main.async(execute: apply)
+        } else {
+            apply()
         }
     }
 
@@ -892,6 +911,8 @@ struct PagedEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: EditorCanvasView, context: Context) {
+        nsView.isInsideViewUpdate = true
+        defer { nsView.isInsideViewUpdate = false }
         nsView.canvas.setHeaderHeight(headerHeight)
         nsView.canvas.applyConfig(controller.config, options: controller.canvasOptions)
         nsView.apply(options: controller.canvasOptions)
