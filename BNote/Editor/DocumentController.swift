@@ -1010,19 +1010,8 @@ final class DocumentController: NSObject, ObservableObject {
         canvasOptions.fullWidth.toggle()
     }
 
-    func setZoom(_ zoom: CGFloat) {
-        canvasOptions.zoom = min(max(zoom, 0.5), 2.0)
-    }
-
-    /// Steps through the Docs ladder 50 · 75 · 90 · 100 · 125 · 150 · 200.
-    func zoom(step direction: Int) {
-        let steps = CanvasOptions.zoomSteps
-        let current = canvasOptions.zoom
-        if direction > 0 {
-            setZoom(steps.first { $0 > current + 0.001 } ?? steps.last!)
-        } else {
-            setZoom(steps.last { $0 < current - 0.001 } ?? steps.first!)
-        }
+    func toggleSmallText() {
+        canvasOptions.smallText.toggle()
     }
 }
 

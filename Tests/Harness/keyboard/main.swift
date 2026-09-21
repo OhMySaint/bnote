@@ -493,7 +493,7 @@ check("danh sách vẫn tiếp tục", controller.textStorage.string.hasSuffix("
 tvR = freshLine(); typeText(tvR, "``` code"); tvR.keyDown(with: key(36, "\r")); pump()
 check("khối mã vẫn tiếp tục", controller.isCodeParagraph(at: controller.textStorage.length))
 
-print("== zoom kiểu Docs: không reflow, mép theo % ==")
+print("== hai tuỳ chọn kiểu Notion: mép theo %, chữ nhỏ không cuộn ngang ==")
 controller.load(data: nil, plainText: String(repeating: "chữ ", count: 400), config: PageConfig()); pump()
 controller.canvasOptions = Defaults.canvasOptions
 host.apply(options: controller.canvasOptions)
@@ -503,18 +503,12 @@ check("mặc định: mép 7,5% (75pt) → cột 850", colW == 850 && abs(host.c
 controller.canvasOptions.fullWidth = true; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
 check("toàn rộng: mép 3% (30pt) → cột 940", host.canvas.contentWidth == 940, "w=\(host.canvas.contentWidth)")
 controller.canvasOptions.fullWidth = false; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
-let lines1 = controller.layoutManager.usedRect(for: controller.layoutManager.textContainers[0]).height
-controller.setZoom(1.5); host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
-check("zoom 150%: magnification 1,5", abs(host.scrollView.magnification - 1.5) < 0.001)
-check("zoom 150%: cột giữ nguyên bề rộng tài liệu (không reflow)", host.canvas.contentWidth == colW, "w=\(host.canvas.contentWidth)")
-let lines2 = controller.layoutManager.usedRect(for: controller.layoutManager.textContainers[0]).height
-check("zoom 150%: số dòng không đổi", abs(lines1 - lines2) < 0.5)
-check("zoom 150%: tài liệu rộng hơn cửa sổ → cuộn ngang", host.canvas.frame.width * 1.5 > 1000)
-controller.setZoom(0.75); host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
-check("zoom 75%: vẫn không reflow", host.canvas.contentWidth == colW)
-controller.zoom(step: 1); check("nấc kế tiếp từ 75% là 90%", abs(controller.canvasOptions.zoom - 0.9) < 0.001, "got \(controller.canvasOptions.zoom)")
-controller.setZoom(1)
-controller.setZoom(1); host.apply(options: controller.canvasOptions); pump()
+controller.canvasOptions.smallText = true; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
+check("chữ nhỏ: magnification 0,875", abs(host.scrollView.magnification - 0.875) < 0.001)
+check("chữ nhỏ: tài liệu vừa khít cửa sổ, không cuộn ngang", abs(host.canvas.frame.width * 0.875 - 1000) < 1.5, "docW=\(host.canvas.frame.width)")
+check("chữ nhỏ: cột nhìn vẫn 850", abs(host.canvas.contentWidth * 0.875 - 850) < 1.5, "docW=\(host.canvas.contentWidth)")
+check("chỉ còn hai mức: 1 và 0,875", CanvasOptions.smallTextScale == 0.875 && CanvasOptions().magnification == 1)
+controller.canvasOptions.smallText = false; host.apply(options: controller.canvasOptions); pump()
 
 print(failures.isEmpty ? "\nTẤT CẢ ĐỀU ĐẠT" : "\nTHẤT BẠI (\(failures.count)): \(failures.joined(separator: " | "))")
 exit(failures.isEmpty ? 0 : 1)

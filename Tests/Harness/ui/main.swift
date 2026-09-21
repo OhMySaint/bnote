@@ -125,7 +125,7 @@ shoot("bnote-editor.png")
 check("bìa nằm trong canvas cuộn", controller.documentView != nil)
 
 
-print("== bấm vào đầu trang ở các mức zoom ==")
+print("== bấm vào đầu trang ở hai bố cục ==")
 MainActor.assumeIsolated { note.coverData = nil; note.coverStyle = ""; note.tags = []; note.title = "hv" }
 controller.load(data: nil, plainText: "fsdfs", config: PageConfig()); pump(0.5)
 func canvasHost() -> EditorCanvasView? {
@@ -144,7 +144,7 @@ func clickTagField(label: String) {
     let p = NSPoint(x: layout.leading + 40, y: layout.top + height - 22)
     let inWindow = host.convert(p, to: nil)
     let hit = window.contentView?.hitTest(window.contentView!.convert(inWindow, from: nil))
-    print("   hitTest → \(hit.map { String(describing: type(of: $0)) } ?? "nil") zoom=\(host.enclosingScrollView?.magnification ?? 0)")
+    print("   hitTest → \(hit.map { String(describing: type(of: $0)) } ?? "nil") mag=\(host.enclosingScrollView?.magnification ?? 0)")
     window.makeFirstResponder(controller.activeTextView)
     let down = NSEvent.mouseEvent(with: .leftMouseDown, location: inWindow, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
     let up = NSEvent.mouseEvent(with: .leftMouseUp, location: inWindow, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 2, clickCount: 1, pressure: 1)!
@@ -172,19 +172,19 @@ if let host = canvasHost() {
 }
 
 
-print("== zoom: đầu trang không bị chồng ==")
-for z in [0.75, 1.0, 1.5] {
-    controller.setZoom(z); pump(0.5); window.contentView?.layoutSubtreeIfNeeded(); pump(0.3)
+print("== chữ nhỏ: đầu trang không bị chồng ==")
+for small in [true, false] {
+    controller.canvasOptions.smallText = small; pump(0.5); window.contentView?.layoutSubtreeIfNeeded(); pump(0.3)
     guard let host = canvasHost() else { break }
     let mag = host.scrollView.magnification
     let page = host.canvas.pages[0]
     let layout = controller.headerLayout
-    let headerVisual = PageHeaderView.height(for: note, width: layout.width) * layout.zoom
+    let headerVisual = PageHeaderView.height(for: note, width: layout.width)
     let textTopVisual = (page.frame.minY + page.textView.frame.minY - host.scrollView.contentView.bounds.origin.y) * mag
-    check(String(format: "%.0f%%: chữ nằm dưới đầu trang", z * 100), abs(textTopVisual - headerVisual - PagedDocumentView.Metrics.columnTop * mag) < 2, String(format: "textTop=%.1f header=%.1f zoom=%.2f", textTopVisual, headerVisual, layout.zoom))
-    check(String(format: "%.0f%%: cột tiêu đề × zoom thẳng với cột chữ", z * 100), abs(layout.leading * layout.zoom - (host.canvas.contentLeading - host.scrollView.contentView.bounds.origin.x) * mag) < 2, String(format: "lead=%.1f col=%.1f", layout.leading * layout.zoom, host.canvas.contentLeading * mag))
+    let label = small ? "chữ nhỏ" : "cỡ thường"
+    check("\(label): chữ nằm dưới đầu trang", abs(textTopVisual - headerVisual - PagedDocumentView.Metrics.columnTop * mag) < 2, String(format: "textTop=%.1f header=%.1f mag=%.3f", textTopVisual, headerVisual, mag))
+    check("\(label): cột tiêu đề thẳng với cột chữ", abs(layout.leading - (host.canvas.contentLeading - host.scrollView.contentView.bounds.origin.x) * mag) < 2, String(format: "lead=%.1f col=%.1f", layout.leading, host.canvas.contentLeading * mag))
 }
-controller.setZoom(1)
 
 print(failures.isEmpty ? "\nTẤT CẢ ĐỀU ĐẠT" : "\nTHẤT BẠI (\(failures.count)): \(failures.joined(separator: " | "))")
 exit(failures.isEmpty ? 0 : 1)

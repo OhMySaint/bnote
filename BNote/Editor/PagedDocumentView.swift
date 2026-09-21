@@ -454,13 +454,10 @@ struct CanvasOptions: Equatable {
     var fullWidth = false
     /// Notion's "Small text": the document renders a notch smaller, more per line.
     var smallText = false
-    /// Docs-style zoom: pure magnification of the whole page, never reflows text.
-    var zoom: CGFloat = 1
 
     static let smallTextScale: CGFloat = 0.875
-    static let zoomSteps: [CGFloat] = [0.5, 0.75, 0.9, 1, 1.25, 1.5, 2]
-    var textScale: CGFloat { continuous && smallText ? Self.smallTextScale : 1 }
-    var magnification: CGFloat { textScale * zoom }
+    /// The only scaling left: Notion's two sizes, never a free zoom.
+    var magnification: CGFloat { continuous && smallText ? Self.smallTextScale : 1 }
 }
 
 /// Stacks pages vertically and grows or shrinks the page count as the shared
@@ -674,9 +671,8 @@ final class PagedDocumentView: NSView {
     private func layoutContinuousColumn() {
         guard let page = pages.first, let layoutManager else { return }
         let scrollView = enclosingScrollView
-        let magnification = max(options.magnification, 0.01)
-        let textScale = options.textScale
-        // Window size in screen points, independent of zoom, so zooming never reflows.
+        let magnification = options.magnification
+        // Window size in screen points, independent of the small-text scale.
         let windowWidth = scrollView?.contentView.frame.width ?? bounds.width
         let windowHeight = scrollView?.contentView.frame.height ?? bounds.height
 
@@ -684,9 +680,9 @@ final class PagedDocumentView: NSView {
         let gutter = max(Metrics.minimumGutter, (windowWidth * ratio).rounded())
         let columnVisual = max(Metrics.minimumColumn, windowWidth - gutter * 2)
         // "Small text" fits more per line: the column holds more document points.
-        let columnWidth = (columnVisual / textScale).rounded()
+        let columnWidth = (columnVisual / magnification).rounded()
 
-        // Document width in document points: at least the window, wider when zoomed in.
+        // Document width in document points: the window, or the minimum column plus gutters.
         let docWidth = max(windowWidth / magnification, columnWidth + (gutter * 2) / magnification).rounded()
         let columnX = ((docWidth - columnWidth) / 2).rounded()
         contentLeading = columnX
@@ -722,7 +718,7 @@ final class PagedDocumentView: NSView {
         contentLeading = pageOriginX + config.margins.left
         contentWidth = config.contentSize.width
 
-        var y = headerHeight / max(options.magnification, 0.01) + Metrics.gap
+        var y = headerHeight / options.magnification + Metrics.gap
         for (index, page) in pages.enumerated() {
             page.pageNumber = index + 1
             page.frame = NSRect(x: pageOriginX, y: y, width: config.size.width, height: config.size.height)
@@ -828,7 +824,7 @@ final class EditorCanvasView: NSView {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = NSColor.underPageBackgroundColor
         scrollView.borderType = .noBorder
-        // Pinch is handled here (see magnify(with:)) so zoom stays a clean, stepped value.
+        // Magnification is only ever the small-text scale; no pinch zoom.
         scrollView.allowsMagnification = false
         scrollView.documentView = canvas
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -858,37 +854,22 @@ final class EditorCanvasView: NSView {
         publishHeaderLayout()
     }
 
-    /// Where the header overlay should sit. The overlay is laid out at zoom 1 and
-    /// then scaled by `zoom`, so leading / width are given before scaling.
+    /// Where the header overlay should sit, in screen points (the overlay is
+    /// outside the magnified scroll view).
     private func publishHeaderLayout() {
         guard let layout = controller?.headerLayout else { return }
         let magnification = scrollView.magnification
-        let zoom = max(options.zoom, 0.01)
         let clip = scrollView.contentView.bounds.origin
-        let leading = (canvas.contentLeading - clip.x) * magnification / zoom
-        let width = canvas.contentWidth * magnification / zoom
+        let leading = (canvas.contentLeading - clip.x) * magnification
+        let width = canvas.contentWidth * magnification
         let scrollOffset = clip.y * magnification
         guard abs(layout.leading - leading) > 0.5 || abs(layout.width - width) > 0.5
-            || abs(layout.scrollOffset - scrollOffset) > 0.5 || abs(layout.zoom - zoom) > 0.001 else { return }
+            || abs(layout.scrollOffset - scrollOffset) > 0.5 else { return }
         DispatchQueue.main.async {
             layout.leading = leading
             layout.width = width
             layout.scrollOffset = scrollOffset
-            layout.zoom = zoom
         }
-    }
-
-    /// Trackpad pinch: continuous zoom while pinching, like Docs.
-    override func magnify(with event: NSEvent) {
-        guard let controller else { return }
-        let next = min(max(controller.canvasOptions.zoom * (1 + event.magnification), 0.5), 2.0)
-        controller.canvasOptions.zoom = (next * 100).rounded() / 100
-    }
-
-    /// Two-finger double tap: back to 100 %, or up to 150 % from there.
-    override func smartMagnify(with event: NSEvent) {
-        guard let controller else { return }
-        controller.canvasOptions.zoom = abs(controller.canvasOptions.zoom - 1) < 0.01 ? 1.5 : 1
     }
 
     func apply(options newOptions: CanvasOptions) {
@@ -905,8 +886,7 @@ final class EditorCanvasView: NSView {
         canvas.relayout()
     }
 
-    /// Small text × zoom. Zoom is pure magnification: the column keeps its
-    /// document width, so lines never re-break while zooming.
+    /// Small text is pure magnification: the column keeps its document width.
     private func updateMagnification() {
         let target = options.magnification
         if abs(scrollView.magnification - target) > 0.001 {

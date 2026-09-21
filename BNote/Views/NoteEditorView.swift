@@ -12,22 +12,17 @@ struct NoteEditorView: View {
     @Query(sort: \Tag.name) private var tags: [Tag]
     @ObservedObject private var headerLayout = DocumentController.shared.headerLayout
 
-    /// The Notion-style header is a SwiftUI overlay above the (magnified) canvas,
-    /// scrolled in step with it, so it stays crisp and fully interactive.
+    /// The Notion-style header is a SwiftUI overlay above the canvas, scrolled
+    /// in step with it, so it stays crisp and fully interactive.
     private var editorWithHeader: some View {
         let layout = headerLayout
-        let zoom = max(layout.zoom, 0.01)
         let height = PageHeaderView.height(for: note, width: layout.width)
-        let visualHeight = height * zoom
-        let visible = max(0, visualHeight - layout.scrollOffset)
-        return PagedEditor(controller: controller, headerHeight: visualHeight)
+        let visible = max(0, height - layout.scrollOffset)
+        return PagedEditor(controller: controller, headerHeight: height)
             .overlay(alignment: .top) {
                 GeometryReader { geometry in
-                    // Laid out at 100 % and scaled with the page, so zooming is uniform.
                     PageHeaderView(note: note, layout: layout)
-                        .frame(width: geometry.size.width / zoom, height: height, alignment: .topLeading)
-                        .scaleEffect(zoom, anchor: .topLeading)
-                        .frame(width: geometry.size.width, height: visualHeight, alignment: .topLeading)
+                        .frame(width: geometry.size.width, height: height, alignment: .topLeading)
                         .offset(y: -layout.scrollOffset)
                 }
                 .frame(height: visible, alignment: .top)
@@ -84,10 +79,7 @@ struct NoteEditorView: View {
                 .foregroundStyle(.tertiary)
 
             Divider().frame(height: 12)
-            widthControls
-            statusToggle("Chữ nhỏ", icon: "textformat.size.smaller", keyPath: \.smallText)
-            Divider().frame(height: 12)
-            zoomMenu
+            layoutToggles
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -106,53 +98,20 @@ struct NoteEditorView: View {
         .animation(.easeInOut(duration: 0.2), value: controller.hasUnsavedChanges)
     }
 
-    private func statusToggle(_ label: String, icon: String, keyPath: WritableKeyPath<CanvasOptions, Bool>) -> some View {
-        let isOn = controller.canvasOptions[keyPath: keyPath]
-        return Button {
-            controller.canvasOptions[keyPath: keyPath].toggle()
-        } label: {
-            Label(label, systemImage: icon)
-                .foregroundStyle(isOn ? Color.accentColor : .secondary)
-        }
-        .buttonStyle(.borderless)
-        .help("Ẩn/hiện \(label.lowercased())")
-    }
-
-    private var zoomMenu: some View {
-        Menu {
-            ForEach(CanvasOptions.zoomSteps, id: \.self) { step in
-                Button {
-                    controller.setZoom(step)
-                } label: {
-                    Text("\(Int(step * 100))%")
-                    if abs(controller.canvasOptions.zoom - step) < 0.01 { Image(systemName: "checkmark") }
-                }
+    /// Notion's two page options: "Small text" and "Full width", as switches.
+    private var layoutToggles: some View {
+        HStack(spacing: 14) {
+            Toggle(isOn: $controller.canvasOptions.smallText) {
+                Label("Chữ nhỏ", systemImage: "textformat.size.smaller")
             }
-        } label: {
-            Text("\(Int((controller.canvasOptions.zoom * 100).rounded()))%")
-                .monospacedDigit()
+            .help("Chữ nhỏ: cả trang hiển thị nhỏ hơn một nấc (⇧⌘−)")
+            Toggle(isOn: $controller.canvasOptions.fullWidth) {
+                Label("Toàn chiều rộng", systemImage: "arrow.left.and.right")
+            }
+            .help("Toàn chiều rộng: cột chữ giãn sát hai mép (⇧⌘\\)")
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help("Thu phóng — pinch trên trackpad, ⌘+ ⌘− ⌘0")
-    }
-
-    private var widthControls: some View {
-        Button {
-            controller.toggleFullWidth()
-        } label: {
-            Label("Toàn rộng", systemImage: "arrow.left.and.right")
-                .foregroundStyle(controller.canvasOptions.fullWidth ? Color.accentColor : .secondary)
-        }
-        .buttonStyle(.borderless)
+        .toggleStyle(.switch)
+        .controlSize(.mini)
         .disabled(!controller.canvasOptions.continuous)
-        .help("Toàn chiều rộng: cột chữ giãn sát hai mép (⇧⌘\\)")
-    }
-}
-
-private extension CGFloat {
-    func rounded(toPlaces places: Int) -> CGFloat {
-        let factor = pow(10, CGFloat(places))
-        return (self * factor).rounded() / factor
     }
 }
