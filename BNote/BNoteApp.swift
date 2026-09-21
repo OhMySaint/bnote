@@ -131,16 +131,8 @@ struct BNoteCommands: Commands {
                 .keyboardShortcut("g", modifiers: [.command, .control])
             Toggle("Đường biên lề", isOn: $controller.canvasOptions.showMarginGuides)
             Toggle("Trang giấy rời", isOn: Binding(get: { !controller.canvasOptions.continuous }, set: { controller.canvasOptions.continuous = !$0 }))
-            Divider()
-            Button("Phóng to") { controller.setZoom(controller.effectiveZoom + 0.1) }
-            Button("Thu nhỏ") { controller.setZoom(controller.effectiveZoom - 0.1) }
-            Button("Cỡ thật") { controller.setZoom(1) }
-                .keyboardShortcut("0", modifiers: .command)
-            Toggle("Vừa chiều rộng", isOn: Binding(
-                get: { controller.canvasOptions.fitWidth },
-                set: { on in if on { controller.zoomToFitWidth() } else { controller.setZoom(controller.effectiveZoom) } }
-            ))
-                .keyboardShortcut("9", modifiers: .command)
+            Toggle("Toàn chiều rộng", isOn: $controller.canvasOptions.fullWidth)
+                .keyboardShortcut("\\", modifiers: [.command, .shift])
         }
     }
 

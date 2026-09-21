@@ -26,7 +26,7 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 - Khổ A4 / Letter / Legal / A5 / A3 / Tabloid, giấy dọc hoặc ngang
 - Lề bốn cạnh chỉnh riêng bằng số cm, hoặc kéo tay trực tiếp trên thước kẻ
 - Thước kẻ, lưới ô vuông nửa centimét, đường biên lề — bật tắt từng thứ
-- Thu phóng 50–250%
+- Không có zoom (như Notion): chữ luôn 1:1, cột đọc 720pt tự giãn theo cửa sổ, bật "Toàn chiều rộng" khi cần
 - Đếm số trang, số từ, số ký tự ở thanh trạng thái
 
 **Tổ chức nội dung**
@@ -71,7 +71,7 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 | ⌃⌘F | Chế độ tập trung (ẩn cả hai bên) |
 | ⇧⌘P | Mở thiết lập trang |
 | ⌃⌘R / ⌃⌘G | Thước kẻ / lưới ô vuông |
-| ⌘0 | Về cỡ thật 100% |
+| ⇧⌘\\ | Toàn chiều rộng / cột đọc |
 
 ## Đóng gói bản dùng thử
 

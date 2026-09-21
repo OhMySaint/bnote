@@ -116,22 +116,16 @@ struct PageSetupPanel: View {
                     Toggle("Đường biên lề", isOn: optionBinding(\.showMarginGuides))
                 }
 
-                section("Thu phóng") {
-                    Toggle("Vừa chiều rộng cửa sổ", isOn: Binding(
-                        get: { controller.canvasOptions.fitWidth },
-                        set: { on in
-                            if on { controller.zoomToFitWidth() } else { controller.setZoom(controller.effectiveZoom) }
-                        }
+                section("Bố cục") {
+                    Toggle("Toàn chiều rộng", isOn: Binding(
+                        get: { controller.canvasOptions.fullWidth },
+                        set: { controller.canvasOptions.fullWidth = $0 }
                     ))
-                    HStack {
-                        Slider(value: zoomBinding, in: 0.5...2.5)
-                            .disabled(controller.canvasOptions.fitWidth)
-                        Text("\(Int((controller.effectiveZoom * 100).rounded()))%")
-                            .font(.caption.monospacedDigit())
-                            .frame(width: 40, alignment: .trailing)
-                    }
-                    Button("Về 100%") { controller.setZoom(1) }
-                        .buttonStyle(.link)
+                    .disabled(!controller.canvasOptions.continuous)
+                    Text("Chữ luôn giữ nguyên cỡ; cột nội dung giãn theo cửa sổ, tối đa 720pt trừ khi bật toàn chiều rộng.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(14)
@@ -273,12 +267,6 @@ struct PageSetupPanel: View {
         )
     }
 
-    private var zoomBinding: Binding<Double> {
-        Binding(
-            get: { controller.canvasOptions.fitWidth ? controller.effectiveZoom : controller.canvasOptions.zoom },
-            set: { controller.setZoom($0) }
-        )
-    }
 
     private func optionBinding(_ keyPath: WritableKeyPath<CanvasOptions, Bool>) -> Binding<Bool> {
         Binding(

@@ -64,7 +64,9 @@ struct NoteEditorView: View {
         HStack(spacing: 12) {
             saveIndicator
             Divider().frame(height: 12)
-            Text("\(controller.pageCount) trang · \(controller.wordCount) từ · \(controller.characterCount) ký tự")
+            Text(controller.canvasOptions.continuous
+                ? "\(controller.wordCount) từ · \(controller.characterCount) ký tự"
+                : "\(controller.pageCount) trang · \(controller.wordCount) từ · \(controller.characterCount) ký tự")
                 .monospacedDigit()
             Divider().frame(height: 12)
             Text("\(controller.config.paper.label) \(controller.config.orientation.label.lowercased()) · lề \(Unit.format(controller.config.margins.left))")
@@ -79,7 +81,7 @@ struct NoteEditorView: View {
             statusToggle("Lưới", icon: "grid", keyPath: \.showGrid)
 
             Divider().frame(height: 12)
-            zoomControls
+            widthControls
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -110,41 +112,16 @@ struct NoteEditorView: View {
         .help("Ẩn/hiện \(label.lowercased())")
     }
 
-    private var zoomControls: some View {
-        HStack(spacing: 2) {
-            Button {
-                controller.setZoom((controller.effectiveZoom - 0.1).rounded(toPlaces: 1))
-            } label: {
-                Image(systemName: "minus.magnifyingglass")
-            }
-            .buttonStyle(.borderless)
-            .help("Thu nhỏ")
-
-            Menu {
-                Button("Vừa chiều rộng") { controller.zoomToFitWidth() }
-                    .disabled(controller.canvasOptions.fitWidth)
-                Divider()
-                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { value in
-                    Button("\(Int(value * 100))%") { controller.setZoom(CGFloat(value)) }
-                }
-            } label: {
-                Text(controller.canvasOptions.fitWidth
-                    ? "Vừa · \(Int((controller.effectiveZoom * 100).rounded()))%"
-                    : "\(Int((controller.effectiveZoom * 100).rounded()))%")
-                    .monospacedDigit()
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("Thu phóng — Vừa chiều rộng tự co giãn theo cửa sổ (⌘9)")
-
-            Button {
-                controller.setZoom((controller.effectiveZoom + 0.1).rounded(toPlaces: 1))
-            } label: {
-                Image(systemName: "plus.magnifyingglass")
-            }
-            .buttonStyle(.borderless)
-            .help("Phóng to")
+    private var widthControls: some View {
+        Button {
+            controller.toggleFullWidth()
+        } label: {
+            Label(controller.canvasOptions.fullWidth ? "Toàn rộng" : "Cột đọc", systemImage: controller.canvasOptions.fullWidth ? "arrow.left.and.right" : "text.justify.leading")
+                .foregroundStyle(controller.canvasOptions.fullWidth ? Color.accentColor : .secondary)
         }
+        .buttonStyle(.borderless)
+        .disabled(!controller.canvasOptions.continuous)
+        .help("Cột đọc 720pt hoặc giãn hết cửa sổ (⇧⌘\\)")
     }
 }
 

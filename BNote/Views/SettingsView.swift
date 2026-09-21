@@ -13,7 +13,7 @@ struct SettingsView: View {
     @AppStorage(Defaults.marginKey) private var marginPoints = 54.0
     @AppStorage(Defaults.paperKey) private var paperRaw = Paper.a4.rawValue
     @AppStorage(Defaults.orientationKey) private var orientationRaw = PageOrientation.portrait.rawValue
-    @AppStorage(Defaults.fitWidthKey) private var fitWidth = true
+    @AppStorage(Defaults.fullWidthKey) private var fullWidth = false
     @AppStorage(Defaults.rulerKey) private var showRuler = false
     @AppStorage(Defaults.gridKey) private var showGrid = false
     @AppStorage(Defaults.guidesKey) private var showGuides = false
@@ -59,7 +59,7 @@ struct SettingsView: View {
                     Text("Liên tục (kiểu Notion)").tag(true)
                     Text("Trang giấy rời").tag(false)
                 }
-                Toggle("Vừa chiều rộng cửa sổ", isOn: $fitWidth)
+                Toggle("Toàn chiều rộng (cột chữ giãn hết cửa sổ)", isOn: $fullWidth)
                 Toggle("Thước kẻ", isOn: $showRuler)
                 Toggle("Lưới ô vuông", isOn: $showGrid)
                 Toggle("Đường biên lề", isOn: $showGuides)

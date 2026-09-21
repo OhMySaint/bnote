@@ -254,10 +254,10 @@ final class PageView: NSView {
         NSRect(origin: config.contentOrigin, size: config.contentSize)
     }
 
-    func apply(config: PageConfig, options: CanvasOptions) {
+    func apply(config: PageConfig, options: CanvasOptions, contentRect override: NSRect? = nil) {
         self.config = config
         self.options = options
-        textView.frame = contentRect
+        textView.frame = override ?? contentRect
         layer?.shadowOpacity = options.continuous ? 0 : 1
         layer?.cornerRadius = options.continuous ? 0 : 2
         needsDisplay = true
@@ -271,6 +271,7 @@ final class PageView: NSView {
         bounds.fill()
 
         let content = contentRect
+        guard !options.continuous else { return }
 
         if options.showGrid {
             NSColor.separatorColor.withAlphaComponent(0.35).setStroke()
@@ -448,12 +449,10 @@ struct CanvasOptions: Equatable {
     var showGrid = false
     var showMarginGuides = false
     var showRuler = false
-    /// Notion look: one white surface, no sheet chrome, page breaks as thin lines.
+    /// Notion look: one continuous column that follows the window, no pages, no scaling.
     var continuous = true
-    /// Scale the sheet to fill the window width, the way Notion's column follows the window.
-    var fitWidth = true
-    /// Manual scale, used when `fitWidth` is off.
-    var zoom: CGFloat = 1
+    /// Notion's "Full width": let the column use the whole window instead of the reading width.
+    var fullWidth = false
 }
 
 /// Stacks pages vertically and grows or shrinks the page count as the shared
@@ -462,7 +461,17 @@ final class PagedDocumentView: NSView {
     enum Metrics {
         static let gap: CGFloat = 26
         static let sideInset: CGFloat = 36
+        /// Notion's reading column and the breathing room either side of it.
+        static let readingWidth: CGFloat = 720
+        static let minimumColumn: CGFloat = 360
+        static let gutter: CGFloat = 48
+        static let columnTop: CGFloat = 8
+        static let tailRoom: CGFloat = 240
     }
+
+    /// Where the text column sits, for the header overlay to line up with.
+    private(set) var contentLeading: CGFloat = 0
+    private(set) var contentWidth: CGFloat = 487
 
     weak var controller: DocumentController?
     private(set) var pages: [PageView] = []
@@ -557,6 +566,14 @@ final class PagedDocumentView: NSView {
         isPaginating = true
         defer { isPaginating = false }
 
+        if options.continuous {
+            // One column, one container tall enough for anything.
+            while pages.count > 1 { removeLastPage() }
+            layoutPages()
+            controller?.notePageCountChanged()
+            return
+        }
+
         var safety = 0
         while safety < 400 {
             guard let lastContainer = layoutManager.textContainers.last else { break }
@@ -589,24 +606,20 @@ final class PagedDocumentView: NSView {
         let configChanged = newConfig != config
         let optionsChanged = newOptions != options
         guard configChanged || optionsChanged else { return }
+        let modeChanged = newOptions.continuous != options.continuous
         config = newConfig
         options = newOptions
+        enclosingScrollView?.superview?.needsLayout = true
 
-        if !options.fitWidth, let scrollView = enclosingScrollView, abs(scrollView.magnification - options.zoom) > 0.001 {
-            scrollView.setMagnification(options.zoom, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
+        if !options.continuous {
+            for page in pages {
+                page.textView.textContainer?.size = config.contentSize
+                page.textView.minSize = config.contentSize
+                page.textView.maxSize = config.contentSize
+                page.apply(config: config, options: options)
+            }
         }
-        if configChanged {
-            // Paper size feeds the fit-width ratio; let the host recompute it.
-            enclosingScrollView?.superview?.needsLayout = true
-        }
-
-        for page in pages {
-            page.textView.textContainer?.size = config.contentSize
-            page.textView.minSize = config.contentSize
-            page.textView.maxSize = config.contentSize
-            page.apply(config: config, options: options)
-        }
-        if configChanged {
+        if configChanged || modeChanged {
             updatePagination()
         } else {
             layoutPages()
@@ -634,35 +647,70 @@ final class PagedDocumentView: NSView {
     // MARK: - Geometry
 
     private func layoutPages() {
+        if options.continuous {
+            layoutContinuousColumn()
+        } else {
+            layoutSheets()
+        }
+        enclosingScrollView?.backgroundColor = options.continuous ? .textBackgroundColor : .underPageBackgroundColor
+        pages.first?.textView.needsDisplay = true
+        needsDisplay = true
+        NotificationCenter.default.post(name: .canvasGeometryChanged, object: self)
+    }
+
+    /// Notion layout: text at its natural size in a centred column whose width
+    /// follows the window up to the reading width (or the whole window when
+    /// "full width" is on). Nothing is scaled and nothing is paginated.
+    private func layoutContinuousColumn() {
+        guard let page = pages.first, let layoutManager else { return }
+        let scrollView = enclosingScrollView
+        let visibleWidth = scrollView?.contentView.bounds.width ?? bounds.width
+        let visibleHeight = scrollView?.contentView.bounds.height ?? bounds.height
+
+        let available = max(Metrics.minimumColumn, visibleWidth - Metrics.gutter * 2)
+        let columnWidth = (options.fullWidth ? available : min(available, Metrics.readingWidth)).rounded()
+        let columnX = ((visibleWidth - columnWidth) / 2).rounded()
+        contentLeading = columnX
+        contentWidth = columnWidth
+        pageOriginX = columnX - config.margins.left
+
+        let container = page.textView.textContainer
+        let tall = NSSize(width: columnWidth, height: 10_000_000)
+        if container?.size != tall {
+            container?.size = tall
+        }
+        layoutManager.ensureLayout(for: container!)
+        let used = layoutManager.usedRect(for: container!).height
+        let textHeight = max(used, visibleHeight - headerHeight - Metrics.columnTop) + Metrics.tailRoom
+
+        page.textView.minSize = NSSize(width: columnWidth, height: textHeight)
+        page.textView.maxSize = NSSize(width: columnWidth, height: textHeight)
+        let top = headerHeight + Metrics.columnTop
+        page.pageNumber = 1
+        page.frame = NSRect(x: 0, y: top, width: visibleWidth, height: textHeight)
+        page.apply(config: config, options: options, contentRect: NSRect(x: columnX, y: 0, width: columnWidth, height: textHeight))
+
+        let newSize = NSSize(width: visibleWidth, height: top + textHeight)
+        if frame.size != newSize { setFrameSize(newSize) }
+    }
+
+    /// Print-preview layout: real sheets, stacked, at 1:1.
+    private func layoutSheets() {
         let visibleWidth = (enclosingScrollView?.contentView.bounds.width ?? bounds.width)
         let width = max(visibleWidth, config.size.width + Metrics.sideInset * 2)
         pageOriginX = ((width - config.size.width) / 2).rounded()
+        contentLeading = pageOriginX + config.margins.left
+        contentWidth = config.contentSize.width
 
-        // The header overlay is unscaled; convert its height into document points.
-        let magnification = enclosingScrollView?.magnification ?? 1
-        let headerInDocument = headerHeight / max(magnification, 0.01)
-
-        // Continuous: the first sheet slides up under the header so text starts
-        // right below the title; sheets butt against each other.
-        let gap: CGFloat = options.continuous ? 0 : Metrics.gap
-        var y = options.continuous
-            ? (headerHeight > 0 ? max(0, headerInDocument - config.margins.top + 6) : 0)
-            : headerInDocument + Metrics.gap
+        var y = headerHeight + Metrics.gap
         for (index, page) in pages.enumerated() {
             page.pageNumber = index + 1
             page.frame = NSRect(x: pageOriginX, y: y, width: config.size.width, height: config.size.height)
             page.apply(config: config, options: options)
-            y += config.size.height + gap
+            y += config.size.height + Metrics.gap
         }
-        enclosingScrollView?.backgroundColor = options.continuous ? .textBackgroundColor : .underPageBackgroundColor
-
         let newSize = NSSize(width: width, height: y)
-        if frame.size != newSize {
-            setFrameSize(newSize)
-        }
-        pages.first?.textView.needsDisplay = true
-        needsDisplay = true
-        NotificationCenter.default.post(name: .canvasGeometryChanged, object: self)
+        if frame.size != newSize { setFrameSize(newSize) }
     }
 
     override func layout() {
@@ -670,30 +718,9 @@ final class PagedDocumentView: NSView {
         layoutPages()
     }
 
-    /// Page numbers in the gap under each sheet; in continuous mode a thin
-    /// dashed line marks where the printed page breaks.
+    /// Page numbers in the gap under each sheet (paper mode only).
     override func draw(_ dirtyRect: NSRect) {
-        guard pages.count > 1 else { return }
-        if options.continuous {
-            NSColor.separatorColor.setStroke()
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
-                .foregroundColor: NSColor.quaternaryLabelColor,
-            ]
-            for page in pages.dropLast() {
-                let y = page.frame.maxY + 0.5
-                let line = NSBezierPath()
-                line.move(to: NSPoint(x: page.frame.minX + config.margins.left, y: y))
-                line.line(to: NSPoint(x: page.frame.maxX - config.margins.right, y: y))
-                line.lineWidth = 0.5
-                line.setLineDash([3, 4], count: 2, phase: 0)
-                line.stroke()
-                let label = "trang \(page.pageNumber + 1)" as NSString
-                let size = label.size(withAttributes: attributes)
-                label.draw(at: NSPoint(x: page.frame.maxX - config.margins.right - size.width, y: y + 3), withAttributes: attributes)
-            }
-            return
-        }
+        guard pages.count > 1, !options.continuous else { return }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.tertiaryLabelColor,
@@ -985,9 +1012,7 @@ final class EditorCanvasView: NSView {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = NSColor.underPageBackgroundColor
         scrollView.borderType = .noBorder
-        scrollView.allowsMagnification = true
-        scrollView.minMagnification = 0.5
-        scrollView.maxMagnification = 3.0
+        scrollView.allowsMagnification = false
         scrollView.documentView = canvas
         scrollView.contentView.postsBoundsChangedNotifications = true
 
@@ -1022,14 +1047,13 @@ final class EditorCanvasView: NSView {
         publishHeaderLayout()
     }
 
-    /// Where the header overlay should sit, in this view's (unscaled) points.
+    /// Where the header overlay should sit, in this view's points.
     private func publishHeaderLayout() {
         guard let layout = controller?.headerLayout else { return }
-        let magnification = scrollView.magnification
         let clip = scrollView.contentView.bounds.origin
-        let leading = (canvas.pageOriginX + canvas.config.margins.left - clip.x) * magnification
-        let width = canvas.config.contentSize.width * magnification
-        let scrollOffset = clip.y * magnification
+        let leading = canvas.contentLeading - clip.x
+        let width = canvas.contentWidth
+        let scrollOffset = clip.y
         let rulerHeight: CGFloat = showRuler ? 22 : 0
         guard abs(layout.leading - leading) > 0.5 || abs(layout.width - width) > 0.5
             || abs(layout.scrollOffset - scrollOffset) > 0.5 || abs(layout.top - rulerHeight) > 0.5 else { return }
@@ -1064,24 +1088,12 @@ final class EditorCanvasView: NSView {
         canvas.relayout()
     }
 
-    /// Fit mode: the sheet plus a small gutter always spans the visible width.
+    /// No zoom: text is always 1:1. A sheet wider than the window simply scrolls.
     private func updateMagnification() {
-        let target: CGFloat
-        if options.fitWidth {
-            let gutter: CGFloat = 28
-            let available = scrollView.contentView.frame.width - gutter * 2
-            let pageWidth = canvas.config.size.width
-            // Capped: a sheet at 2× already fills a laptop screen with 26pt body text.
-            target = min(max(available / max(pageWidth, 1), 0.5), 2.0)
-        } else {
-            target = options.zoom
-        }
-        if abs(scrollView.magnification - target) > 0.001 {
-            scrollView.setMagnification(target, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
+        if abs(scrollView.magnification - 1) > 0.001 {
+            scrollView.setMagnification(1, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
             canvas.relayout()
         }
-        controller?.reportEffectiveZoom(target)
-        ruler.needsDisplay = true
         publishHeaderLayout()
     }
 }

@@ -88,7 +88,7 @@ enum Defaults {
     static let marginKey = "defaultMarginPoints"
     static let paperKey = "defaultPaper"
     static let orientationKey = "defaultOrientation"
-    static let fitWidthKey = "fitWidth"
+    static let fullWidthKey = "fullWidth"
     static let rulerKey = "showRuler"
     static let gridKey = "showGrid"
     static let guidesKey = "showMarginGuides"
@@ -100,7 +100,7 @@ enum Defaults {
             marginKey: 54.0, // 0.75 in
             paperKey: Paper.a4.rawValue,
             orientationKey: PageOrientation.portrait.rawValue,
-            fitWidthKey: true,
+            fullWidthKey: false,
             rulerKey: false,
             gridKey: false,
             guidesKey: false,
@@ -132,8 +132,7 @@ enum Defaults {
             showMarginGuides: d.bool(forKey: guidesKey),
             showRuler: d.bool(forKey: rulerKey),
             continuous: d.object(forKey: continuousKey) == nil ? true : d.bool(forKey: continuousKey),
-            fitWidth: d.object(forKey: fitWidthKey) == nil ? true : d.bool(forKey: fitWidthKey),
-            zoom: 1
+            fullWidth: d.bool(forKey: fullWidthKey)
         )
     }
 }
