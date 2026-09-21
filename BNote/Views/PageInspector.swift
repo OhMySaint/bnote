@@ -111,18 +111,16 @@ struct PageSetupPanel: View {
                         get: { !controller.canvasOptions.continuous },
                         set: { controller.canvasOptions.continuous = !$0 }
                     ))
-                    Toggle("Thước kẻ", isOn: optionBinding(\.showRuler))
                     Toggle("Lưới ô vuông", isOn: optionBinding(\.showGrid))
                     Toggle("Đường biên lề", isOn: optionBinding(\.showMarginGuides))
                 }
 
-                section("Bố cục") {
-                    Toggle("Toàn chiều rộng", isOn: Binding(
-                        get: { controller.canvasOptions.fullWidth },
-                        set: { controller.canvasOptions.fullWidth = $0 }
-                    ))
-                    .disabled(!controller.canvasOptions.continuous)
-                    Text("Chữ luôn giữ nguyên cỡ; cột nội dung giãn theo cửa sổ, tối đa 720pt trừ khi bật toàn chiều rộng.")
+                section("Bố cục trang này") {
+                    Toggle("Toàn chiều rộng", isOn: optionBinding(\.fullWidth))
+                        .disabled(!controller.canvasOptions.continuous)
+                    Toggle("Chữ nhỏ", isOn: optionBinding(\.smallText))
+                        .disabled(!controller.canvasOptions.continuous)
+                    Text("Cột đọc rộng tối đa 900pt canh giữa; toàn chiều rộng giãn sát hai mép. Lưu riêng cho từng trang.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)

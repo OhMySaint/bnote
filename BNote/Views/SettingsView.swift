@@ -14,7 +14,7 @@ struct SettingsView: View {
     @AppStorage(Defaults.paperKey) private var paperRaw = Paper.a4.rawValue
     @AppStorage(Defaults.orientationKey) private var orientationRaw = PageOrientation.portrait.rawValue
     @AppStorage(Defaults.fullWidthKey) private var fullWidth = false
-    @AppStorage(Defaults.rulerKey) private var showRuler = false
+    @AppStorage(Defaults.smallTextKey) private var smallText = false
     @AppStorage(Defaults.gridKey) private var showGrid = false
     @AppStorage(Defaults.guidesKey) private var showGuides = false
     @AppStorage(Defaults.continuousKey) private var continuous = true
@@ -54,13 +54,13 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Hiển thị khi mở app") {
+            Section("Mặc định cho trang mới") {
                 Picker("Kiểu trang", selection: $continuous) {
                     Text("Liên tục (kiểu Notion)").tag(true)
                     Text("Trang giấy rời").tag(false)
                 }
                 Toggle("Toàn chiều rộng (cột chữ giãn hết cửa sổ)", isOn: $fullWidth)
-                Toggle("Thước kẻ", isOn: $showRuler)
+                Toggle("Chữ nhỏ", isOn: $smallText)
                 Toggle("Lưới ô vuông", isOn: $showGrid)
                 Toggle("Đường biên lề", isOn: $showGuides)
             }

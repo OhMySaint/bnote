@@ -25,8 +25,8 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 - Phân trang thật: chữ tràn từ trang này sang trang kế tiếp khi gõ
 - Khổ A4 / Letter / Legal / A5 / A3 / Tabloid, giấy dọc hoặc ngang
 - Lề bốn cạnh chỉnh riêng bằng số cm, hoặc kéo tay trực tiếp trên thước kẻ
-- Thước kẻ, lưới ô vuông nửa centimét, đường biên lề — bật tắt từng thứ
-- Không có zoom (như Notion): chữ luôn 1:1, cột đọc 720pt tự giãn theo cửa sổ, bật "Toàn chiều rộng" khi cần
+- Lưới ô vuông nửa centimét, đường biên lề (kéo được) — bật tắt từng thứ ở chế độ Trang giấy rời
+- Không có zoom (như Notion): cột đọc 900pt canh giữa, tự co theo cửa sổ; **Toàn chiều rộng** giãn sát mép; **Chữ nhỏ** thu chữ 12,5% — cả hai lưu theo từng trang
 - Đếm số trang, số từ, số ký tự ở thanh trạng thái
 
 **Tổ chức nội dung**
@@ -70,7 +70,7 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 | ⌃⌘O | Ẩn/hiện bảng bên phải |
 | ⌃⌘F | Chế độ tập trung (ẩn cả hai bên) |
 | ⇧⌘P | Mở thiết lập trang |
-| ⌃⌘R / ⌃⌘G | Thước kẻ / lưới ô vuông |
+| ⇧⌘- / ⌃⌘G | Chữ nhỏ / lưới ô vuông |
 | ⇧⌘\\ | Toàn chiều rộng / cột đọc |
 
 ## Đóng gói bản dùng thử
@@ -99,7 +99,7 @@ BNote/
   Models/Note.swift           # @Model: trang, quan hệ cha–con, thẻ, khổ giấy
   Models/PageConfig.swift     # Khổ giấy và lề
   Editor/DocumentController.swift  # Text storage dùng chung, mọi lệnh định dạng, menu /
-  Editor/PagedDocumentView.swift   # Canvas nhiều trang, thước kẻ, lưới, zoom
+  Editor/PagedDocumentView.swift   # Canvas: cột liên tục kiểu Notion hoặc trang giấy rời
   Editor/SlashCommand.swift        # Danh mục lệnh của menu /
   Editor/SlashMenuPanel.swift      # Bảng nổi cạnh con trỏ
   Editor/TextStyle.swift      # Kiểu đoạn, nhận diện đầu mục cho mục lục

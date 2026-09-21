@@ -125,8 +125,8 @@ struct BNoteCommands: Commands {
             Button("Quản lý thẻ…") { actions.manageTags?() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()
-            Toggle("Thước kẻ", isOn: $controller.canvasOptions.showRuler)
-                .keyboardShortcut("r", modifiers: [.command, .control])
+            Toggle("Chữ nhỏ", isOn: $controller.canvasOptions.smallText)
+                .keyboardShortcut("-", modifiers: [.command, .shift])
             Toggle("Lưới ô vuông", isOn: $controller.canvasOptions.showGrid)
                 .keyboardShortcut("g", modifiers: [.command, .control])
             Toggle("Đường biên lề", isOn: $controller.canvasOptions.showMarginGuides)

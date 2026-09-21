@@ -30,6 +30,9 @@ final class Note {
     var headerAlignmentRaw: String = HeaderAlignment.leading.rawValue
     var subtitle: String = ""
     var showIcon: Bool = true
+    // Layout (per page, like Notion)
+    var fullWidth: Bool = false
+    var smallText: Bool = false
 
     var parent: Note?
     @Relationship(deleteRule: .cascade, inverse: \Note.parent)

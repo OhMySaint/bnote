@@ -448,11 +448,15 @@ final class PageView: NSView {
 struct CanvasOptions: Equatable {
     var showGrid = false
     var showMarginGuides = false
-    var showRuler = false
-    /// Notion look: one continuous column that follows the window, no pages, no scaling.
+    /// Notion look: one continuous column that follows the window, no pages.
     var continuous = true
     /// Notion's "Full width": let the column use the whole window instead of the reading width.
     var fullWidth = false
+    /// Notion's "Small text": the document renders a notch smaller, more per line.
+    var smallText = false
+
+    static let smallTextScale: CGFloat = 0.875
+    var textScale: CGFloat { continuous && smallText ? Self.smallTextScale : 1 }
 }
 
 /// Stacks pages vertically and grows or shrinks the page count as the shared
@@ -462,9 +466,10 @@ final class PagedDocumentView: NSView {
         static let gap: CGFloat = 26
         static let sideInset: CGFloat = 36
         /// Notion's reading column and the breathing room either side of it.
-        static let readingWidth: CGFloat = 720
+        static let readingWidth: CGFloat = 900
         static let minimumColumn: CGFloat = 360
-        static let gutter: CGFloat = 48
+        static let gutter: CGFloat = 40
+        static let fullWidthGutter: CGFloat = 24
         static let columnTop: CGFloat = 8
         static let tailRoom: CGFloat = 240
     }
@@ -664,11 +669,16 @@ final class PagedDocumentView: NSView {
     private func layoutContinuousColumn() {
         guard let page = pages.first, let layoutManager else { return }
         let scrollView = enclosingScrollView
+        // Clip bounds are document points; with "small text" the document is
+        // drawn at a reduced scale, so visual sizes are divided by that scale.
+        let scale = options.textScale
         let visibleWidth = scrollView?.contentView.bounds.width ?? bounds.width
         let visibleHeight = scrollView?.contentView.bounds.height ?? bounds.height
+        let headerHeight = self.headerHeight / scale
 
-        let available = max(Metrics.minimumColumn, visibleWidth - Metrics.gutter * 2)
-        let columnWidth = (options.fullWidth ? available : min(available, Metrics.readingWidth)).rounded()
+        let gutter = (options.fullWidth ? Metrics.fullWidthGutter : Metrics.gutter) / scale
+        let available = max(Metrics.minimumColumn / scale, visibleWidth - gutter * 2)
+        let columnWidth = (options.fullWidth ? available : min(available, Metrics.readingWidth / scale)).rounded()
         let columnX = ((visibleWidth - columnWidth) / 2).rounded()
         contentLeading = columnX
         contentWidth = columnWidth
@@ -788,216 +798,12 @@ extension Notification.Name {
     static let canvasGeometryChanged = Notification.Name("BNote.canvasGeometryChanged")
 }
 
-// MARK: - Ruler
-
-/// Horizontal ruler in centimetres with draggable left / right margin handles,
-/// lined up with the sheet below it.
-final class RulerView: NSView {
-    weak var controller: DocumentController?
-    weak var canvas: PagedDocumentView?
-    weak var scrollView: NSScrollView?
-
-    private enum Edge { case left, right }
-    private var drag: Edge?
-    private var hover: Edge?
-
-    private static let handleWidth: CGFloat = 16
-    private static let handleHeight: CGFloat = 12
-
-    override var isFlipped: Bool { true }
-
-    override func resetCursorRects() {
-        super.resetCursorRects()
-        for edge in [Edge.left, .right] {
-            addCursorRect(handleRect(edge: edge).insetBy(dx: -4, dy: -2), cursor: .resizeLeftRight)
-        }
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        for area in trackingAreas { removeTrackingArea(area) }
-        addTrackingArea(NSTrackingArea(
-            rect: bounds,
-            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        ))
-    }
-
-    private var config: PageConfig { canvas?.config ?? PageConfig() }
-    private var zoom: CGFloat { scrollView?.magnification ?? 1 }
-
-    /// X of the sheet's left edge in ruler coordinates.
-    private var pageOrigin: CGFloat {
-        guard let canvas, let scrollView else { return 0 }
-        let scrolled = scrollView.contentView.bounds.origin.x
-        return (canvas.pageOriginX - scrolled) * zoom
-    }
-
-    private func x(forPagePoint point: CGFloat) -> CGFloat {
-        pageOrigin + point * zoom
-    }
-
-    private func pagePoint(forX x: CGFloat) -> CGFloat {
-        (x - pageOrigin) / max(zoom, 0.01)
-    }
-
-    private func handleRect(edge: Edge) -> NSRect {
-        let position = edge == .left
-            ? x(forPagePoint: config.margins.left)
-            : x(forPagePoint: config.size.width - config.margins.right)
-        return NSRect(
-            x: position - Self.handleWidth / 2,
-            y: bounds.height - Self.handleHeight - 1,
-            width: Self.handleWidth,
-            height: Self.handleHeight
-        )
-    }
-
-    private func edge(at point: NSPoint) -> Edge? {
-        for edge in [Edge.left, .right] where handleRect(edge: edge).insetBy(dx: -4, dy: -4).contains(point) {
-            return edge
-        }
-        return nil
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.underPageBackgroundColor.setFill()
-        bounds.fill()
-
-        let pageStart = x(forPagePoint: 0)
-        let pageEnd = x(forPagePoint: config.size.width)
-        let contentStart = x(forPagePoint: config.margins.left)
-        let contentEnd = x(forPagePoint: config.size.width - config.margins.right)
-        let trackY = bounds.height - 9
-
-        // Margin area darker, text area light.
-        NSColor.tertiaryLabelColor.withAlphaComponent(0.22).setFill()
-        NSRect(x: pageStart, y: trackY, width: pageEnd - pageStart, height: 5).fill()
-        NSColor.textBackgroundColor.setFill()
-        NSRect(x: contentStart, y: trackY, width: contentEnd - contentStart, height: 5).fill()
-
-        // Ticks in the chosen unit (quarter inch / half centimetre), numbered per whole unit.
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 8),
-            .foregroundColor: NSColor.secondaryLabelColor,
-        ]
-        NSColor.secondaryLabelColor.setStroke()
-        let ticks = NSBezierPath()
-        ticks.lineWidth = 0.5
-
-        let unit = Unit.current
-        let subdivisions = unit == .inch ? 4 : 2
-        let step = unit.points / CGFloat(subdivisions)
-        var tick = 0
-        var point = config.margins.left
-        while point <= config.size.width - config.margins.right + 0.5 {
-            let position = x(forPagePoint: point).rounded() + 0.25
-            let isWhole = tick % subdivisions == 0
-            ticks.move(to: NSPoint(x: position, y: bounds.height - 13))
-            ticks.line(to: NSPoint(x: position, y: bounds.height - (isWhole ? 18 : 16)))
-            if isWhole {
-                let label = "\(tick / subdivisions)" as NSString
-                let size = label.size(withAttributes: attributes)
-                label.draw(at: NSPoint(x: position - size.width / 2, y: 1), withAttributes: attributes)
-            }
-            tick += 1
-            point += step
-        }
-        ticks.stroke()
-
-        for edge in [Edge.left, .right] {
-            drawHandle(edge)
-        }
-    }
-
-    /// A small downward triangle, like the margin markers in word processors.
-    private func drawHandle(_ edge: Edge) {
-        let rect = handleRect(edge: edge)
-        let active = drag == edge
-        let lit = active || hover == edge
-
-        let path = NSBezierPath()
-        path.move(to: NSPoint(x: rect.minX, y: rect.minY))
-        path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
-        path.line(to: NSPoint(x: rect.maxX, y: rect.minY + 5))
-        path.line(to: NSPoint(x: rect.midX, y: rect.maxY))
-        path.line(to: NSPoint(x: rect.minX, y: rect.minY + 5))
-        path.close()
-
-        NSColor.controlAccentColor.withAlphaComponent(lit ? 1 : 0.8).setFill()
-        path.fill()
-        if lit {
-            NSColor.controlAccentColor.withAlphaComponent(0.5).setStroke()
-            path.lineWidth = 1
-            path.stroke()
-        }
-
-        guard active else { return }
-        let value = edge == .left ? config.margins.left : config.margins.right
-        let label = Unit.format(value) as NSString
-        let labelAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
-            .foregroundColor: NSColor.white,
-        ]
-        let size = label.size(withAttributes: labelAttributes)
-        var origin = NSPoint(x: rect.midX - size.width / 2, y: 2)
-        origin.x = min(max(6, origin.x), bounds.width - size.width - 6)
-        let box = NSRect(origin: origin, size: size).insetBy(dx: -5, dy: -2)
-        NSColor.controlAccentColor.setFill()
-        NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
-        label.draw(at: origin, withAttributes: labelAttributes)
-    }
-
-    override func mouseMoved(with event: NSEvent) {
-        let edge = edge(at: convert(event.locationInWindow, from: nil))
-        if edge != hover {
-            hover = edge
-            needsDisplay = true
-        }
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        if hover != nil {
-            hover = nil
-            needsDisplay = true
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        drag = edge(at: convert(event.locationInWindow, from: nil))
-        needsDisplay = true
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard let drag, let controller else { return }
-        let point = convert(event.locationInWindow, from: nil)
-        var updated = config
-        let value = pagePoint(forX: point.x)
-        switch drag {
-        case .left: updated.margins.left = Unit.snap(value)
-        case .right: updated.margins.right = Unit.snap(config.size.width - value)
-        }
-        updated.clampMargins()
-        controller.config = updated
-        needsDisplay = true
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        drag = nil
-        needsDisplay = true
-        window?.invalidateCursorRects(for: self)
-    }
-}
-
 // MARK: - SwiftUI host
 
-/// Ruler strip stacked on top of the scrolling page canvas.
+/// Hosts the scrolling canvas and keeps the header overlay informed.
 final class EditorCanvasView: NSView {
     let scrollView = NSScrollView()
-    let ruler = RulerView()
     let canvas: PagedDocumentView
-    private var showRuler = true
     private var options = CanvasOptions()
     private weak var controller: DocumentController?
 
@@ -1012,26 +818,23 @@ final class EditorCanvasView: NSView {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = NSColor.underPageBackgroundColor
         scrollView.borderType = .noBorder
-        scrollView.allowsMagnification = false
+        scrollView.allowsMagnification = true
+        scrollView.minMagnification = CanvasOptions.smallTextScale
+        scrollView.maxMagnification = 1
         scrollView.documentView = canvas
         scrollView.contentView.postsBoundsChangedNotifications = true
 
-        ruler.controller = controller
-        ruler.canvas = canvas
-        ruler.scrollView = scrollView
-
-        addSubview(ruler)
         addSubview(scrollView)
 
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(refreshRuler),
+            selector: #selector(geometryChanged),
             name: NSView.boundsDidChangeNotification,
             object: scrollView.contentView
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(refreshRuler),
+            selector: #selector(geometryChanged),
             name: .canvasGeometryChanged,
             object: canvas
         )
@@ -1042,34 +845,26 @@ final class EditorCanvasView: NSView {
 
     override var isFlipped: Bool { true }
 
-    @objc private func refreshRuler() {
-        ruler.needsDisplay = true
+    @objc private func geometryChanged() {
         publishHeaderLayout()
     }
 
-    /// Where the header overlay should sit, in this view's points.
+    /// Where the header overlay should sit, in this view's (unscaled) points.
     private func publishHeaderLayout() {
         guard let layout = controller?.headerLayout else { return }
+        let scale = scrollView.magnification
         let clip = scrollView.contentView.bounds.origin
-        let leading = canvas.contentLeading - clip.x
-        let width = canvas.contentWidth
-        let scrollOffset = clip.y
-        let rulerHeight: CGFloat = showRuler ? 22 : 0
+        let leading = (canvas.contentLeading - clip.x) * scale
+        let width = canvas.contentWidth * scale
+        let scrollOffset = clip.y * scale
         guard abs(layout.leading - leading) > 0.5 || abs(layout.width - width) > 0.5
-            || abs(layout.scrollOffset - scrollOffset) > 0.5 || abs(layout.top - rulerHeight) > 0.5 else { return }
+            || abs(layout.scrollOffset - scrollOffset) > 0.5 || layout.top != 0 else { return }
         DispatchQueue.main.async {
             layout.leading = leading
             layout.width = width
             layout.scrollOffset = scrollOffset
-            layout.top = rulerHeight
+            layout.top = 0
         }
-    }
-
-    func setRulerVisible(_ visible: Bool) {
-        guard visible != showRuler else { return }
-        showRuler = visible
-        ruler.isHidden = !visible
-        needsLayout = true
     }
 
     func apply(options newOptions: CanvasOptions) {
@@ -1080,18 +875,17 @@ final class EditorCanvasView: NSView {
 
     override func layout() {
         super.layout()
-        let rulerHeight: CGFloat = showRuler ? 22 : 0
-        ruler.frame = NSRect(x: 0, y: 0, width: bounds.width, height: rulerHeight)
-        scrollView.frame = NSRect(x: 0, y: rulerHeight, width: bounds.width, height: bounds.height - rulerHeight)
+        scrollView.frame = bounds
         updateMagnification()
-        // Window resizes change the visible width the sheets are centred in.
+        // Window resizes change the visible width the column is centred in.
         canvas.relayout()
     }
 
-    /// No zoom: text is always 1:1. A sheet wider than the window simply scrolls.
+    /// The only scale is Notion's "small text"; otherwise text is 1:1.
     private func updateMagnification() {
-        if abs(scrollView.magnification - 1) > 0.001 {
-            scrollView.setMagnification(1, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
+        let target = options.textScale
+        if abs(scrollView.magnification - target) > 0.001 {
+            scrollView.setMagnification(target, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
             canvas.relayout()
         }
         publishHeaderLayout()
@@ -1108,7 +902,6 @@ struct PagedEditor: NSViewRepresentable {
         DispatchQueue.main.async {
             view.canvas.applyConfig(controller.config, options: controller.canvasOptions)
             view.apply(options: controller.canvasOptions)
-            view.setRulerVisible(controller.canvasOptions.showRuler)
             controller.focusEditor()
         }
         return view
@@ -1118,7 +911,5 @@ struct PagedEditor: NSViewRepresentable {
         nsView.canvas.setHeaderHeight(headerHeight)
         nsView.canvas.applyConfig(controller.config, options: controller.canvasOptions)
         nsView.apply(options: controller.canvasOptions)
-        nsView.setRulerVisible(controller.canvasOptions.showRuler)
-        nsView.ruler.needsDisplay = true
     }
 }

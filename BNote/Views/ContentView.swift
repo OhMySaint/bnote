@@ -85,6 +85,11 @@ struct ContentView: View {
         .onChange(of: controller.config) { _, config in
             selectedNote?.pageConfig = config
         }
+        .onChange(of: controller.canvasOptions) { _, options in
+            guard let note = selectedNote else { return }
+            if note.fullWidth != options.fullWidth { note.fullWidth = options.fullWidth }
+            if note.smallText != options.smallText { note.smallText = options.smallText }
+        }
         .onAppear(perform: wireCommands)
         .sheet(isPresented: $showTagManager) { TagManagerView() }
         .confirmationDialog(
@@ -128,6 +133,8 @@ struct ContentView: View {
             controller.load(data: nil, plainText: "", config: PageConfig())
             return
         }
+        controller.canvasOptions.fullWidth = note.fullWidth
+        controller.canvasOptions.smallText = note.smallText
         controller.load(data: note.rtfData, plainText: note.content, config: note.pageConfig)
         controller.onSave = { [weak note] data, text in
             guard let note else { return }
@@ -146,6 +153,8 @@ struct ContentView: View {
         let siblings = parent?.sortedChildren ?? notes.filter { $0.parent == nil }
         let note = Note(parent: parent, sortIndex: (siblings.map(\.sortIndex).max() ?? 0) + 1)
         note.pageConfig = Defaults.pageConfig
+        note.fullWidth = Defaults.canvasOptions.fullWidth
+        note.smallText = Defaults.canvasOptions.smallText
         context.insert(note)
         parent?.isExpanded = true
         try? context.save()
@@ -186,6 +195,8 @@ struct ContentView: View {
         copy.headerAlignmentRaw = note.headerAlignmentRaw
         copy.subtitle = note.subtitle
         copy.showIcon = note.showIcon
+        copy.fullWidth = note.fullWidth
+        copy.smallText = note.smallText
         context.insert(copy)
         try? context.save()
         selection = copy.persistentModelID

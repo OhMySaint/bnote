@@ -89,7 +89,7 @@ enum Defaults {
     static let paperKey = "defaultPaper"
     static let orientationKey = "defaultOrientation"
     static let fullWidthKey = "fullWidth"
-    static let rulerKey = "showRuler"
+    static let smallTextKey = "smallText"
     static let gridKey = "showGrid"
     static let guidesKey = "showMarginGuides"
     static let continuousKey = "continuousLayout"
@@ -101,7 +101,7 @@ enum Defaults {
             paperKey: Paper.a4.rawValue,
             orientationKey: PageOrientation.portrait.rawValue,
             fullWidthKey: false,
-            rulerKey: false,
+            smallTextKey: false,
             gridKey: false,
             guidesKey: false,
             continuousKey: true,
@@ -130,9 +130,9 @@ enum Defaults {
         return CanvasOptions(
             showGrid: d.bool(forKey: gridKey),
             showMarginGuides: d.bool(forKey: guidesKey),
-            showRuler: d.bool(forKey: rulerKey),
             continuous: d.object(forKey: continuousKey) == nil ? true : d.bool(forKey: continuousKey),
-            fullWidth: d.bool(forKey: fullWidthKey)
+            fullWidth: d.bool(forKey: fullWidthKey),
+            smallText: d.bool(forKey: smallTextKey)
         )
     }
 }

@@ -77,11 +77,8 @@ struct NoteEditorView: View {
                 .foregroundStyle(.tertiary)
 
             Divider().frame(height: 12)
-            statusToggle("Thước", icon: "ruler", keyPath: \.showRuler)
-            statusToggle("Lưới", icon: "grid", keyPath: \.showGrid)
-
-            Divider().frame(height: 12)
             widthControls
+            statusToggle("Chữ nhỏ", icon: "textformat.size.smaller", keyPath: \.smallText)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -116,12 +113,12 @@ struct NoteEditorView: View {
         Button {
             controller.toggleFullWidth()
         } label: {
-            Label(controller.canvasOptions.fullWidth ? "Toàn rộng" : "Cột đọc", systemImage: controller.canvasOptions.fullWidth ? "arrow.left.and.right" : "text.justify.leading")
+            Label("Toàn rộng", systemImage: "arrow.left.and.right")
                 .foregroundStyle(controller.canvasOptions.fullWidth ? Color.accentColor : .secondary)
         }
         .buttonStyle(.borderless)
         .disabled(!controller.canvasOptions.continuous)
-        .help("Cột đọc 720pt hoặc giãn hết cửa sổ (⇧⌘\\)")
+        .help("Toàn chiều rộng: cột chữ giãn sát hai mép (⇧⌘\\)")
     }
 }
 
