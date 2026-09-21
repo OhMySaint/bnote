@@ -92,6 +92,7 @@ enum Defaults {
     static let rulerKey = "showRuler"
     static let gridKey = "showGrid"
     static let guidesKey = "showMarginGuides"
+    static let continuousKey = "continuousLayout"
 
     static func register() {
         UserDefaults.standard.register(defaults: [
@@ -103,6 +104,7 @@ enum Defaults {
             rulerKey: false,
             gridKey: false,
             guidesKey: false,
+            continuousKey: true,
         ])
     }
 
@@ -129,6 +131,7 @@ enum Defaults {
             showGrid: d.bool(forKey: gridKey),
             showMarginGuides: d.bool(forKey: guidesKey),
             showRuler: d.bool(forKey: rulerKey),
+            continuous: d.object(forKey: continuousKey) == nil ? true : d.bool(forKey: continuousKey),
             fitWidth: d.object(forKey: fitWidthKey) == nil ? true : d.bool(forKey: fitWidthKey),
             zoom: 1
         )

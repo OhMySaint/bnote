@@ -140,6 +140,7 @@ struct BNoteCommands: Commands {
             Toggle("Lưới ô vuông", isOn: $controller.canvasOptions.showGrid)
                 .keyboardShortcut("g", modifiers: [.command, .control])
             Toggle("Đường biên lề", isOn: $controller.canvasOptions.showMarginGuides)
+            Toggle("Trang giấy rời", isOn: Binding(get: { !controller.canvasOptions.continuous }, set: { controller.canvasOptions.continuous = !$0 }))
             Divider()
             Button("Phóng to") { controller.setZoom(controller.effectiveZoom + 0.1) }
             Button("Thu nhỏ") { controller.setZoom(controller.effectiveZoom - 0.1) }

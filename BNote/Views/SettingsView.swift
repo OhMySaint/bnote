@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(Defaults.rulerKey) private var showRuler = false
     @AppStorage(Defaults.gridKey) private var showGrid = false
     @AppStorage(Defaults.guidesKey) private var showGuides = false
+    @AppStorage(Defaults.continuousKey) private var continuous = true
 
     private var unit: MeasurementUnit { MeasurementUnit(rawValue: unitRaw) ?? .inch }
 
@@ -54,6 +55,10 @@ struct SettingsView: View {
             }
 
             Section("Hiển thị khi mở app") {
+                Picker("Kiểu trang", selection: $continuous) {
+                    Text("Liên tục (kiểu Notion)").tag(true)
+                    Text("Trang giấy rời").tag(false)
+                }
                 Toggle("Vừa chiều rộng cửa sổ", isOn: $fitWidth)
                 Toggle("Thước kẻ", isOn: $showRuler)
                 Toggle("Lưới ô vuông", isOn: $showGrid)

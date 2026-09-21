@@ -255,6 +255,8 @@ final class PageView: NSView {
         self.config = config
         self.options = options
         textView.frame = contentRect
+        layer?.shadowOpacity = options.continuous ? 0 : 1
+        layer?.cornerRadius = options.continuous ? 0 : 2
         needsDisplay = true
         window?.invalidateCursorRects(for: self)
     }
@@ -443,6 +445,8 @@ struct CanvasOptions: Equatable {
     var showGrid = false
     var showMarginGuides = false
     var showRuler = false
+    /// Notion look: one white surface, no sheet chrome, page breaks as thin lines.
+    var continuous = true
     /// Scale the sheet to fill the window width, the way Notion's column follows the window.
     var fitWidth = true
     /// Manual scale, used when `fitWidth` is off.
@@ -658,13 +662,20 @@ final class PagedDocumentView: NSView {
             headerHeight = 0
         }
 
-        var y = headerHeight + Metrics.gap
+        // Continuous: the first sheet slides up under the header so text starts
+        // right below the title; sheets butt against each other.
+        let gap: CGFloat = options.continuous ? 0 : Metrics.gap
+        var y = options.continuous
+            ? (headerHeight > 0 ? max(0, headerHeight - config.margins.top + 6) : 0)
+            : headerHeight + Metrics.gap
         for (index, page) in pages.enumerated() {
             page.pageNumber = index + 1
             page.frame = NSRect(x: pageOriginX, y: y, width: config.size.width, height: config.size.height)
             page.apply(config: config, options: options)
-            y += config.size.height + Metrics.gap
+            y += config.size.height + gap
         }
+        if let headerHost { addSubview(headerHost, positioned: .above, relativeTo: nil) }
+        enclosingScrollView?.backgroundColor = options.continuous ? .textBackgroundColor : .underPageBackgroundColor
 
         let newSize = NSSize(width: width, height: y)
         if frame.size != newSize {
@@ -680,9 +691,30 @@ final class PagedDocumentView: NSView {
         layoutPages()
     }
 
-    /// Page numbers in the gap under each sheet.
+    /// Page numbers in the gap under each sheet; in continuous mode a thin
+    /// dashed line marks where the printed page breaks.
     override func draw(_ dirtyRect: NSRect) {
         guard pages.count > 1 else { return }
+        if options.continuous {
+            NSColor.separatorColor.setStroke()
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .foregroundColor: NSColor.quaternaryLabelColor,
+            ]
+            for page in pages.dropLast() {
+                let y = page.frame.maxY + 0.5
+                let line = NSBezierPath()
+                line.move(to: NSPoint(x: page.frame.minX + config.margins.left, y: y))
+                line.line(to: NSPoint(x: page.frame.maxX - config.margins.right, y: y))
+                line.lineWidth = 0.5
+                line.setLineDash([3, 4], count: 2, phase: 0)
+                line.stroke()
+                let label = "trang \(page.pageNumber + 1)" as NSString
+                let size = label.size(withAttributes: attributes)
+                label.draw(at: NSPoint(x: page.frame.maxX - config.margins.right - size.width, y: y + 3), withAttributes: attributes)
+            }
+            return
+        }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.tertiaryLabelColor,

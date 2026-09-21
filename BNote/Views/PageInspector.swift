@@ -99,6 +99,10 @@ struct PageSetupPanel: View {
                 }
 
                 section("Hiển thị") {
+                    Toggle("Trang giấy rời (bóng, khe giữa trang)", isOn: Binding(
+                        get: { !controller.canvasOptions.continuous },
+                        set: { controller.canvasOptions.continuous = !$0 }
+                    ))
                     Toggle("Thước kẻ", isOn: optionBinding(\.showRuler))
                     Toggle("Lưới ô vuông", isOn: optionBinding(\.showGrid))
                     Toggle("Đường biên lề", isOn: optionBinding(\.showMarginGuides))

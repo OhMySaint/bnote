@@ -37,19 +37,18 @@ struct PageHeaderView: View {
 
     /// Deterministic height so the canvas can place the first sheet below.
     static func height(for note: Note, width: CGFloat) -> CGFloat {
-        var total: CGFloat = note.hasCover ? note.coverHeight : 16
-        total += note.showIcon ? (note.hasCover ? 66 - 28 : 50 + 6) : 0
-        total += 22 + 4 // ghost action row
+        var total: CGFloat = note.hasCover ? note.coverHeight : 30
+        total += note.showIcon ? (note.hasCover ? 66 - 32 : 50) : 0
         let bounding = (note.title.isEmpty ? "Trang" : note.title) as NSString
         let titleRect = bounding.boundingRect(
             with: NSSize(width: max(100, width - 8), height: 400),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: [.font: titleFont]
         )
-        total += min(max(ceil(titleRect.height) + 8, 46), 140)
+        total += (note.showIcon ? 8 : 4) + min(max(ceil(titleRect.height) + 6, 44), 140)
         if !note.subtitle.isEmpty { total += 24 }
-        total += 30 // tags row
-        total += 16
+        total += 8 + 26 // tags row
+        total += 4
         return ceil(total)
     }
 
@@ -193,18 +192,8 @@ struct PageHeaderView: View {
     private var centered: Bool { note.headerAlignment == .center }
 
     private var header: some View {
-        VStack(alignment: centered ? .center : .leading, spacing: 4) {
-            // Icon straddles the banner's bottom edge when there is a cover.
-            HStack {
-                if centered { Spacer(minLength: 0) }
-                if note.showIcon {
-                    iconButton
-                        .padding(.top, note.hasCover ? -28 : 6)
-                }
-                if centered { Spacer(minLength: 0) }
-            }
-
-            // Ghost actions: always laid out, only visible on hover, so nothing shifts.
+        VStack(alignment: centered ? .center : .leading, spacing: 0) {
+            // Ghost actions sit above everything, like Notion's "Add icon / Add cover".
             HStack(spacing: 10) {
                 if !note.showIcon {
                     ghostButton("face.smiling", "Thêm biểu tượng") { note.showIcon = true }
@@ -222,12 +211,25 @@ struct PageHeaderView: View {
             .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
             .opacity(headerHovering ? 1 : 0)
             .animation(.easeOut(duration: 0.12), value: headerHovering)
+            .padding(.top, note.hasCover ? 0 : 8)
+            .offset(y: note.hasCover ? -note.coverHeight + 4 : 0)   // float over the cover's bottom
+            .frame(height: note.hasCover ? 0 : 30)
+
+            HStack {
+                if centered { Spacer(minLength: 0) }
+                if note.showIcon {
+                    iconButton
+                        .padding(.top, note.hasCover ? -32 : 0)
+                }
+                if centered { Spacer(minLength: 0) }
+            }
 
             TextField("Trang không tên", text: $note.title, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 34, weight: .bold))
                 .lineLimit(1...3)
                 .multilineTextAlignment(centered ? .center : .leading)
+                .padding(.top, note.showIcon ? 8 : 4)
                 .onChange(of: note.title) { _, _ in note.touch() }
 
             if !note.subtitle.isEmpty || showHeaderOptions {
@@ -236,15 +238,15 @@ struct PageHeaderView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(centered ? .center : .leading)
+                    .padding(.top, 4)
                     .onChange(of: note.subtitle) { _, _ in note.touch() }
             }
 
             tagsEditor
-                .padding(.top, 4)
+                .padding(.top, 8)
         }
         .padding(.trailing, 8)
-        .padding(.top, note.hasCover ? 0 : 4)
-        .padding(.bottom, 12)
+        .padding(.bottom, 4)
         .onHover { headerHovering = $0 }
         .popover(isPresented: $showHeaderOptions, arrowEdge: .bottom) { headerOptions }
         .contextMenu {
