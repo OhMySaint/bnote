@@ -45,7 +45,9 @@ struct PageSetupPanel: View {
     @ObservedObject var controller: DocumentController
     @State private var showCustomMargins = false
 
-    private static let sliderRange: ClosedRange<Double> = 0.5...5.0
+    private var unit: MeasurementUnit { Unit.current }
+    private var sliderRange: ClosedRange<Double> { unit == .inch ? 0.25...2.0 : 0.5...5.0 }
+    private var sliderStep: Double { unit == .inch ? 0.125 : 0.25 }
 
     var body: some View {
         ScrollView {
@@ -72,7 +74,7 @@ struct PageSetupPanel: View {
                     .labelsHidden()
                 }
 
-                section("Lề") {
+                section("Lề (\(unit.label))") {
                     presetCards
                     marginSlider("Ngang", value: horizontalMargin, symbol: "arrow.left.and.right")
                     marginSlider("Dọc", value: verticalMargin, symbol: "arrow.up.and.down")
@@ -90,7 +92,7 @@ struct PageSetupPanel: View {
                         .padding(.top, 4)
                     }
                     .font(.caption)
-                    Text("Mẹo: kéo đường biên nét đứt trên trang, hoặc tay nắm ▼ trên thước.")
+                    Text("Mặc định cho trang mới đặt trong Cài đặt (⌘,). Bật thước hoặc đường biên lề để kéo trực tiếp.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -165,8 +167,8 @@ struct PageSetupPanel: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 14)
-            Slider(value: value, in: Self.sliderRange, step: 0.25)
-            Text(String(format: "%.2f cm", value.wrappedValue))
+            Slider(value: value, in: sliderRange, step: sliderStep)
+            Text(Unit.format(value.wrappedValue * unit.points))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 54, alignment: .trailing)
@@ -177,11 +179,11 @@ struct PageSetupPanel: View {
     /// Left and right together.
     private var horizontalMargin: Binding<Double> {
         Binding(
-            get: { controller.config.margins.left / Unit.centimeter },
-            set: { cm in
+            get: { controller.config.margins.left / unit.points },
+            set: { value in
                 var margins = controller.config.margins
-                margins.left = cm * Unit.centimeter
-                margins.right = cm * Unit.centimeter
+                margins.left = value * unit.points
+                margins.right = value * unit.points
                 applyMargins(margins)
             }
         )
@@ -190,11 +192,11 @@ struct PageSetupPanel: View {
     /// Top and bottom together.
     private var verticalMargin: Binding<Double> {
         Binding(
-            get: { controller.config.margins.top / Unit.centimeter },
-            set: { cm in
+            get: { controller.config.margins.top / unit.points },
+            set: { value in
                 var margins = controller.config.margins
-                margins.top = cm * Unit.centimeter
-                margins.bottom = cm * Unit.centimeter
+                margins.top = value * unit.points
+                margins.bottom = value * unit.points
                 applyMargins(margins)
             }
         )
@@ -225,10 +227,10 @@ struct PageSetupPanel: View {
             TextField(
                 "",
                 value: Binding(
-                    get: { controller.config.margins[keyPath: keyPath] / Unit.centimeter },
+                    get: { controller.config.margins[keyPath: keyPath] / unit.points },
                     set: { newValue in
                         var config = controller.config
-                        config.margins[keyPath: keyPath] = max(0, newValue) * Unit.centimeter
+                        config.margins[keyPath: keyPath] = max(0, newValue) * unit.points
                         config.clampMargins()
                         controller.config = config
                     }

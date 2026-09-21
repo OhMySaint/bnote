@@ -54,28 +54,118 @@ enum PageOrientation: String, CaseIterable, Identifiable {
     }
 }
 
+enum MeasurementUnit: String, CaseIterable, Identifiable {
+    case inch, centimeter
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .inch: "in"
+        case .centimeter: "cm"
+        }
+    }
+
+    var points: CGFloat {
+        switch self {
+        case .inch: 72
+        case .centimeter: 72 / 2.54
+        }
+    }
+
+    /// Drag snapping step: 1/8 in or 1/4 cm.
+    var snapStep: CGFloat {
+        switch self {
+        case .inch: 72 / 8
+        case .centimeter: 72 / 2.54 / 4
+        }
+    }
+}
+
+/// App-wide defaults for new pages; the inspector still overrides per page.
+enum Defaults {
+    static let unitKey = "unit"
+    static let marginKey = "defaultMarginPoints"
+    static let paperKey = "defaultPaper"
+    static let orientationKey = "defaultOrientation"
+    static let fitWidthKey = "fitWidth"
+    static let rulerKey = "showRuler"
+    static let gridKey = "showGrid"
+    static let guidesKey = "showMarginGuides"
+
+    static func register() {
+        UserDefaults.standard.register(defaults: [
+            unitKey: MeasurementUnit.inch.rawValue,
+            marginKey: 54.0, // 0.75 in
+            paperKey: Paper.a4.rawValue,
+            orientationKey: PageOrientation.portrait.rawValue,
+            fitWidthKey: true,
+            rulerKey: false,
+            gridKey: false,
+            guidesKey: false,
+        ])
+    }
+
+    static var unit: MeasurementUnit {
+        MeasurementUnit(rawValue: UserDefaults.standard.string(forKey: unitKey) ?? "") ?? .inch
+    }
+
+    static var marginPoints: CGFloat {
+        let value = UserDefaults.standard.double(forKey: marginKey)
+        return value > 0 ? value : 54
+    }
+
+    static var pageConfig: PageConfig {
+        PageConfig(
+            paper: Paper(rawValue: UserDefaults.standard.string(forKey: paperKey) ?? "") ?? .a4,
+            orientation: PageOrientation(rawValue: UserDefaults.standard.string(forKey: orientationKey) ?? "") ?? .portrait,
+            margins: PageMargins(uniform: marginPoints)
+        )
+    }
+
+    static var canvasOptions: CanvasOptions {
+        let d = UserDefaults.standard
+        return CanvasOptions(
+            showGrid: d.bool(forKey: gridKey),
+            showMarginGuides: d.bool(forKey: guidesKey),
+            showRuler: d.bool(forKey: rulerKey),
+            fitWidth: d.object(forKey: fitWidthKey) == nil ? true : d.bool(forKey: fitWidthKey),
+            zoom: 1
+        )
+    }
+}
+
 enum Unit {
     static let centimeter: CGFloat = 72 / 2.54
     static let inch: CGFloat = 72
+
+    static var current: MeasurementUnit { Defaults.unit }
+
+    /// "0,75 in" / "1,91 cm" in the unit the user chose.
+    static func format(_ points: CGFloat, unit: MeasurementUnit = current) -> String {
+        let value = points / unit.points
+        let text = unit == .inch ? String(format: "%.2f", value) : String(format: "%.2f", value)
+        return "\(text.replacingOccurrences(of: ".", with: ",")) \(unit.label)"
+    }
 
     static func centimeters(_ points: CGFloat) -> String {
         String(format: "%.2f", points / centimeter)
     }
 
-    /// Snaps a drag to the nearest quarter centimetre so values stay tidy.
-    static func snap(_ points: CGFloat) -> CGFloat {
-        let step = centimeter / 4
+    /// Snaps a drag to the unit's step so values stay tidy.
+    static func snap(_ points: CGFloat, unit: MeasurementUnit = current) -> CGFloat {
+        let step = unit.snapStep
         return max(0, (points / step).rounded() * step)
     }
 }
 
 struct PageMargins: Equatable {
-    var top: CGFloat = 72
-    var bottom: CGFloat = 72
-    var left: CGFloat = 72
-    var right: CGFloat = 72
+    var top: CGFloat = 54
+    var bottom: CGFloat = 54
+    var left: CGFloat = 54
+    var right: CGFloat = 54
 
-    init(top: CGFloat = 72, bottom: CGFloat = 72, left: CGFloat = 72, right: CGFloat = 72) {
+    init(top: CGFloat = 54, bottom: CGFloat = 54, left: CGFloat = 54, right: CGFloat = 54) {
         self.top = top
         self.bottom = bottom
         self.left = left
@@ -94,10 +184,10 @@ struct MarginPreset: Identifiable {
     var id: String { label }
 
     static let all: [MarginPreset] = [
-        .init(shortLabel: "Rộng chữ", label: "Toàn chiều rộng — lề 1,27 cm", margins: PageMargins(uniform: 36)),
-        .init(shortLabel: "Thường", label: "Thường — lề 2,54 cm", margins: PageMargins(uniform: 72)),
-        .init(shortLabel: "Thoáng", label: "Thoáng — lề 3,81 cm", margins: PageMargins(uniform: 108)),
-        .init(shortLabel: "Đóng gáy", label: "Đóng gáy — lề trái 3,81 cm", margins: PageMargins(top: 72, bottom: 72, left: 108, right: 72)),
+        .init(shortLabel: "Hẹp", label: "Hẹp — lề 0,5 in", margins: PageMargins(uniform: 36)),
+        .init(shortLabel: "Thường", label: "Thường — lề 0,75 in", margins: PageMargins(uniform: 54)),
+        .init(shortLabel: "Thoáng", label: "Thoáng — lề 1 in", margins: PageMargins(uniform: 72)),
+        .init(shortLabel: "Đóng gáy", label: "Đóng gáy — lề trái 1,25 in", margins: PageMargins(top: 54, bottom: 54, left: 90, right: 54)),
     ]
 }
 

@@ -11,7 +11,7 @@ struct ContentView: View {
     @State private var selection: PersistentIdentifier?
     @State private var search = ""
     @State private var activeTag: String?
-    @State private var showInspector = true
+    @ObservedObject private var ui = AppUIState.shared
     @State private var inspectorTab = InspectorTab.outline
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var inspectorBeforeFocus = true
@@ -67,7 +67,7 @@ struct ContentView: View {
                 NoteEditorView(
                     note: note,
                     controller: controller,
-                    showInspector: $showInspector,
+                    showInspector: $ui.showInspector,
                     inspectorTab: $inspectorTab
                 )
             } else {
@@ -145,6 +145,7 @@ struct ContentView: View {
     private func addPage(parent: Note?) -> Note {
         let siblings = parent?.sortedChildren ?? notes.filter { $0.parent == nil }
         let note = Note(parent: parent, sortIndex: (siblings.map(\.sortIndex).max() ?? 0) + 1)
+        note.pageConfig = Defaults.pageConfig
         context.insert(note)
         parent?.isExpanded = true
         try? context.save()
@@ -246,22 +247,24 @@ struct ContentView: View {
         actions.deleteCurrent = { if let note = selectedNote { requestDelete(note) } }
         actions.importDocuments = { importDocuments() }
         actions.export = { format in export(format) }
-        actions.toggleOutline = { showInspector.toggle() }
+        actions.toggleOutline = { ui.showInspector.toggle() }
         actions.showPageSetup = {
             inspectorTab = .page
-            showInspector = true
+            ui.showInspector = true
         }
         actions.showDashboard = { selection = nil }
         actions.manageTags = { showTagManager = true }
         actions.toggleFocusMode = {
             withAnimation(.easeInOut(duration: 0.2)) {
-                if columnVisibility == .detailOnly {
+                if ui.focusMode {
                     columnVisibility = .all
-                    showInspector = inspectorBeforeFocus
+                    ui.showInspector = inspectorBeforeFocus
+                    ui.focusMode = false
                 } else {
-                    inspectorBeforeFocus = showInspector
+                    inspectorBeforeFocus = ui.showInspector
                     columnVisibility = .detailOnly
-                    showInspector = false
+                    ui.showInspector = false
+                    ui.focusMode = true
                 }
             }
         }

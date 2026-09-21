@@ -14,15 +14,17 @@ final class Note {
     var isExpanded: Bool = true
     var paperRaw: String = Paper.a4.rawValue
     var orientationRaw: String = PageOrientation.portrait.rawValue
-    var marginTop: Double = 72
-    var marginBottom: Double = 72
-    var marginLeft: Double = 72
-    var marginRight: Double = 72
+    var marginTop: Double = 54
+    var marginBottom: Double = 54
+    var marginLeft: Double = 54
+    var marginRight: Double = 54
 
     // Cover & header
     @Attribute(.externalStorage) var coverData: Data?
     var coverStyle: String = ""
-    var coverHeight: Double = 180
+    var coverHeight: Double = 200
+    /// Vertical focus of the cover picture, 0 = top edge, 1 = bottom edge.
+    var coverOffset: Double = 0.5
     var headerAlignmentRaw: String = HeaderAlignment.leading.rawValue
     var subtitle: String = ""
     var showIcon: Bool = true

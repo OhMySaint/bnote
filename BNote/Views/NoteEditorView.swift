@@ -16,6 +16,9 @@ struct NoteEditorView: View {
     @State private var showHeaderOptions = false
     @State private var headerHovering = false
     @State private var coverHovering = false
+    @State private var repositioning = false
+    @State private var repositionOffset = 0.5
+    @State private var repositionStart = 0.5
     @FocusState private var tagFieldFocused: Bool
 
     private static let icons = [
@@ -54,36 +57,82 @@ struct NoteEditorView: View {
         }
     }
 
-    // MARK: - Cover
+    // MARK: - Cover (Notion style: edge-to-edge banner, icon overlapping its bottom edge)
 
     private var cover: some View {
         ZStack(alignment: .bottomTrailing) {
-            CoverView(note: note)
+            CoverView(note: note, offsetOverride: repositioning ? repositionOffset : nil)
                 .frame(height: note.coverHeight)
                 .frame(maxWidth: .infinity)
                 .clipped()
+                .contentShape(.rect)
+                .gesture(repositionDrag)
 
-            if coverHovering {
-                HStack(spacing: 6) {
+            // Buttons live inside the banner, so showing them never moves anything.
+            HStack(spacing: 6) {
+                if repositioning {
+                    Button("Lưu vị trí") { commitReposition() }
+                    Button("Hủy") { repositioning = false }
+                } else {
                     coverMenu(label: "Đổi ảnh bìa")
+                    if note.coverData != nil {
+                        Button("Chỉnh vị trí") { startReposition() }
+                    }
                     Button("Bỏ") { removeCover() }
                 }
-                .font(.caption)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .padding(10)
-                .transition(.opacity)
+            }
+            .font(.caption)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .padding(10)
+            .opacity(coverHovering || repositioning ? 1 : 0)
+            .animation(.easeOut(duration: 0.15), value: coverHovering)
+
+            if repositioning {
+                Text("Kéo ảnh để chỉnh vị trí")
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.regularMaterial, in: .capsule)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 10)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: coverHovering)
         .onHover { coverHovering = $0 }
+    }
+
+    private var repositionDrag: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                guard repositioning, let data = note.coverData, let image = NSImage(data: data) else { return }
+                // How much taller the fitted picture is than the banner decides drag sensitivity.
+                let bannerWidth = max(1, NSApp.keyWindow?.contentView?.bounds.width ?? 900)
+                let fittedHeight = image.size.height * bannerWidth / max(image.size.width, 1)
+                let overflow = max(1, fittedHeight - note.coverHeight)
+                repositionOffset = min(1, max(0, repositionStart - value.translation.height / overflow))
+            }
+            .onEnded { _ in
+                guard repositioning else { return }
+                repositionStart = repositionOffset
+            }
+    }
+
+    private func startReposition() {
+        repositionOffset = note.coverOffset
+        repositionStart = note.coverOffset
+        repositioning = true
+    }
+
+    private func commitReposition() {
+        note.coverOffset = repositionOffset
+        note.touch()
+        repositioning = false
     }
 
     private func coverMenu(label: String) -> some View {
         Menu(label) {
             Button("Chọn ảnh…") { pickCoverFile() }
             Button("Dán ảnh từ clipboard") { pasteCover() }
-                .disabled(NSPasteboard.general.canReadObject(forClasses: [NSImage.self], options: nil) == false)
             Section("Màu nền") {
                 ForEach(CoverStyle.allCases) { style in
                     Button(style.label) {
@@ -94,9 +143,9 @@ struct NoteEditorView: View {
                 }
             }
             Section("Chiều cao") {
-                Button("Thấp") { note.coverHeight = 120 }
-                Button("Vừa") { note.coverHeight = 180 }
-                Button("Cao") { note.coverHeight = 260 }
+                Button("Thấp") { note.coverHeight = 140 }
+                Button("Vừa") { note.coverHeight = 200 }
+                Button("Cao") { note.coverHeight = 280 }
             }
             if note.hasCover {
                 Divider()
@@ -122,57 +171,75 @@ struct NoteEditorView: View {
     private func setCover(_ image: NSImage) {
         note.coverData = image.coverData()
         note.coverStyle = ""
+        note.coverOffset = 0.5
         note.touch()
     }
 
     private func removeCover() {
         note.coverData = nil
         note.coverStyle = ""
+        repositioning = false
         note.touch()
     }
 
     // MARK: - Header
 
+    private static let headerInset: CGFloat = 28
+    private var centered: Bool { note.headerAlignment == .center }
+
     private var header: some View {
-        VStack(alignment: note.headerAlignment == .center ? .center : .leading, spacing: 6) {
-            if headerHovering && !note.hasCover {
-                HStack(spacing: 8) {
-                    coverMenu(label: "Thêm ảnh bìa")
-                    Button("Tùy chỉnh đầu trang") { showHeaderOptions.toggle() }
+        VStack(alignment: centered ? .center : .leading, spacing: 4) {
+            // Icon straddles the banner's bottom edge when there is a cover.
+            HStack {
+                if centered { Spacer(minLength: 0) }
+                if note.showIcon {
+                    iconButton
+                        .padding(.top, note.hasCover ? -28 : 6)
                 }
-                .font(.caption)
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: note.headerAlignment == .center ? .center : .leading)
+                if centered { Spacer(minLength: 0) }
             }
 
-            HStack(alignment: .center, spacing: 12) {
-                if note.headerAlignment == .center { Spacer(minLength: 0) }
-                if note.showIcon { iconButton }
-                TextField("Trang không tên", text: $note.title)
-                    .textFieldStyle(.plain)
-                    .font(.title.weight(.bold))
-                    .multilineTextAlignment(note.headerAlignment == .center ? .center : .leading)
-                    .fixedSize(horizontal: note.headerAlignment == .center, vertical: false)
-                    .onChange(of: note.title) { _, _ in note.touch() }
-                if note.headerAlignment == .center { Spacer(minLength: 0) }
-                if note.headerAlignment == .leading { tagsEditor }
+            // Ghost actions: always laid out, only visible on hover, so nothing shifts.
+            HStack(spacing: 10) {
+                if !note.showIcon {
+                    ghostButton("face.smiling", "Thêm biểu tượng") { note.showIcon = true }
+                }
+                if !note.hasCover {
+                    coverMenu(label: "Thêm ảnh bìa")
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                }
+                ghostButton("slider.horizontal.3", "Tùy chỉnh") { showHeaderOptions.toggle() }
             }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(height: 22)
+            .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+            .opacity(headerHovering ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: headerHovering)
+
+            TextField("Trang không tên", text: $note.title, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 34, weight: .bold))
+                .lineLimit(1...3)
+                .multilineTextAlignment(centered ? .center : .leading)
+                .onChange(of: note.title) { _, _ in note.touch() }
 
             if !note.subtitle.isEmpty || showHeaderOptions {
                 TextField("Mô tả ngắn cho trang này", text: $note.subtitle)
                     .textFieldStyle(.plain)
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(note.headerAlignment == .center ? .center : .leading)
+                    .multilineTextAlignment(centered ? .center : .leading)
                     .onChange(of: note.subtitle) { _, _ in note.touch() }
             }
 
-            if note.headerAlignment == .center { tagsEditor }
+            tagsEditor
+                .padding(.top, 4)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, note.hasCover ? 10 : 8)
-        .padding(.bottom, 10)
+        .padding(.horizontal, Self.headerInset)
+        .padding(.top, note.hasCover ? 0 : 4)
+        .padding(.bottom, 12)
         .onHover { headerHovering = $0 }
         .popover(isPresented: $showHeaderOptions, arrowEdge: .bottom) { headerOptions }
         .contextMenu {
@@ -181,14 +248,22 @@ struct NoteEditorView: View {
         }
     }
 
+    private func ghostButton(_ symbol: String, _ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+        }
+        .buttonStyle(.borderless)
+    }
+
     private var iconButton: some View {
         Button {
             showIconPicker.toggle()
         } label: {
             Text(note.icon)
-                .font(.system(size: 26))
-                .frame(width: 40, height: 40)
-                .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 9))
+                .font(.system(size: note.hasCover ? 46 : 34))
+                .frame(width: note.hasCover ? 66 : 50, height: note.hasCover ? 66 : 50)
+                .background(note.hasCover ? AnyShapeStyle(.background) : AnyShapeStyle(Color.primary.opacity(0.05)), in: .rect(cornerRadius: 12))
+                .shadow(color: .black.opacity(note.hasCover ? 0.12 : 0), radius: 4, y: 1)
         }
         .buttonStyle(.plain)
         .help("Đổi biểu tượng trang")
@@ -230,9 +305,9 @@ struct NoteEditorView: View {
             ))
             if note.hasCover {
                 Picker("Chiều cao bìa", selection: $note.coverHeight) {
-                    Text("Thấp").tag(120.0)
-                    Text("Vừa").tag(180.0)
-                    Text("Cao").tag(260.0)
+                    Text("Thấp").tag(140.0)
+                    Text("Vừa").tag(200.0)
+                    Text("Cao").tag(280.0)
                 }
                 .pickerStyle(.segmented)
             }
@@ -332,7 +407,7 @@ struct NoteEditorView: View {
             Text("\(controller.pageCount) trang · \(controller.wordCount) từ · \(controller.characterCount) ký tự")
                 .monospacedDigit()
             Divider().frame(height: 12)
-            Text("\(controller.config.paper.label) \(controller.config.orientation.label.lowercased()) · lề \(Unit.centimeters(controller.config.margins.left)) cm")
+            Text("\(controller.config.paper.label) \(controller.config.orientation.label.lowercased()) · lề \(Unit.format(controller.config.margins.left))")
 
             Spacer()
 

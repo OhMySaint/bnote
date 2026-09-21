@@ -38,18 +38,30 @@ enum CoverStyle: String, CaseIterable, Identifiable {
 struct CoverView: View {
     let note: Note
     var cornerRadius: CGFloat = 0
+    /// Overrides the stored focus while the user is dragging to reposition.
+    var offsetOverride: Double?
 
     var body: some View {
-        Group {
-            if let data = note.coverData, let image = NSImage(data: data) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else if let style = CoverStyle(rawValue: note.coverStyle) {
-                style.gradient
-            } else {
-                Color.clear
+        GeometryReader { geometry in
+            Group {
+                if let data = note.coverData, let image = NSImage(data: data) {
+                    // Cover the banner, then slide the picture vertically by the focus value.
+                    let scale = max(geometry.size.width / max(image.size.width, 1), geometry.size.height / max(image.size.height, 1))
+                    let fitted = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                    let overflow = max(0, fitted.height - geometry.size.height)
+                    Image(nsImage: image)
+                        .resizable()
+                        .frame(width: fitted.width, height: fitted.height)
+                        .offset(x: (geometry.size.width - fitted.width) / 2, y: -(offsetOverride ?? note.coverOffset) * overflow)
+                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                } else if let style = CoverStyle(rawValue: note.coverStyle) {
+                    style.gradient
+                } else {
+                    Color.clear
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
         }
         .clipShape(.rect(cornerRadius: cornerRadius))
     }

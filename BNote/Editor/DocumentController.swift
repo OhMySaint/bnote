@@ -65,6 +65,8 @@ final class DocumentController: NSObject, ObservableObject {
 
     private var isLoading = false
     private var isRenumbering = false
+    /// Set while this controller itself asks the text view for a newline.
+    private var isInsertingBreak = false
     private var saveWork: DispatchWorkItem?
 
     override init() {
@@ -1571,6 +1573,7 @@ extension DocumentController: NSTextViewDelegate {
     /// Enter inside a list continues it; Enter on an empty item leaves the list.
     func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
         DebugLog.write("shouldChange range=\(affectedCharRange) repl=\((replacementString ?? "<attr>").debugDescription) menuOpen=\(isSlashMenuOpen)")
+        if isInsertingBreak { return true }
         noteEditForSlashDismissal(at: affectedCharRange)
 
         // Last line of defence: an input method may hand Return/Tab over as
@@ -1608,6 +1611,35 @@ extension DocumentController: NSTextViewDelegate {
                 }
                 textView.typingAttributes[.paragraphStyle] = plain
                 documentDidChange()
+                return false
+            }
+        }
+
+        // Enter at the end of a heading starts a plain paragraph, as in Notion.
+        if listInfo(in: text) == nil, paragraph.location < textStorage.length {
+            let font = textStorage.attribute(.font, at: paragraph.location, effectiveRange: nil) as? NSFont
+            let style = textStorage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+            let detected = TextStyle.detect(font: font, paragraph: style)
+            let isHeading = detected.headerLevel > 0 || detected == .title
+            let tail = string.substring(with: NSRange(location: affectedCharRange.location, length: paragraph.upperBound - affectedCharRange.location))
+            let atEnd = tail.trimmingCharacters(in: .newlines).isEmpty
+            if isHeading, atEnd {
+                let headingAttributes = textStorage.attributes(at: paragraph.location, effectiveRange: nil)
+                isInsertingBreak = true
+                defer { isInsertingBreak = false }
+                guard textView.shouldChangeText(in: affectedCharRange, replacementString: "\n") else { return false }
+                textStorage.beginEditing()
+                textStorage.replaceCharacters(in: affectedCharRange, with: NSAttributedString(string: "\n", attributes: headingAttributes))
+                textStorage.endEditing()
+                textView.didChangeText()
+                textView.setSelectedRange(NSRange(location: affectedCharRange.location + 1, length: 0))
+                var body = EditorDefaults.bodyAttributes
+                if let family = font?.familyName {
+                    body[.font] = NSFont(name: family, size: EditorDefaults.fontSize) ?? EditorDefaults.bodyFont
+                }
+                textView.typingAttributes = body
+                documentDidChange()
+                refreshFormatState()
                 return false
             }
         }

@@ -21,6 +21,11 @@ final class AppActions {
 
 @main
 struct BNoteApp: App {
+    init() {
+        Defaults.register()
+        DocumentController.shared.canvasOptions = Defaults.canvasOptions
+    }
+
     var body: some Scene {
         Window("BNote", id: "main") {
             ContentView()
@@ -29,11 +34,16 @@ struct BNoteApp: App {
         .defaultSize(width: 1180, height: 820)
         .windowToolbarStyle(.unified)
         .commands { BNoteCommands() }
+
+        Settings {
+            SettingsView()
+        }
     }
 }
 
 struct BNoteCommands: Commands {
-    private var controller: DocumentController { .shared }
+    @ObservedObject private var controller = DocumentController.shared
+    @ObservedObject private var ui = AppUIState.shared
     private var actions: AppActions { .shared }
 
     var body: some Commands {
@@ -114,28 +124,31 @@ struct BNoteCommands: Commands {
         }
 
         CommandGroup(after: .sidebar) {
-            Button("Ẩn/hiện bảng bên phải") { actions.toggleOutline?() }
+            Toggle("Bảng bên phải", isOn: Binding(get: { ui.showInspector }, set: { _ in actions.toggleOutline?() }))
                 .keyboardShortcut("o", modifiers: [.command, .control])
             Button("Thiết lập trang…") { actions.showPageSetup?() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-            Button("Chế độ tập trung") { actions.toggleFocusMode?() }
+            Toggle("Chế độ tập trung", isOn: Binding(get: { ui.focusMode }, set: { _ in actions.toggleFocusMode?() }))
                 .keyboardShortcut("f", modifiers: [.command, .control])
             Button("Tổng quan") { actions.showDashboard?() }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
             Button("Quản lý thẻ…") { actions.manageTags?() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()
-            Button("Thước kẻ") { controller.canvasOptions.showRuler.toggle() }
+            Toggle("Thước kẻ", isOn: $controller.canvasOptions.showRuler)
                 .keyboardShortcut("r", modifiers: [.command, .control])
-            Button("Lưới ô vuông") { controller.canvasOptions.showGrid.toggle() }
+            Toggle("Lưới ô vuông", isOn: $controller.canvasOptions.showGrid)
                 .keyboardShortcut("g", modifiers: [.command, .control])
-            Button("Đường biên lề") { controller.canvasOptions.showMarginGuides.toggle() }
+            Toggle("Đường biên lề", isOn: $controller.canvasOptions.showMarginGuides)
             Divider()
             Button("Phóng to") { controller.setZoom(controller.effectiveZoom + 0.1) }
             Button("Thu nhỏ") { controller.setZoom(controller.effectiveZoom - 0.1) }
             Button("Cỡ thật") { controller.setZoom(1) }
                 .keyboardShortcut("0", modifiers: .command)
-            Button("Vừa chiều rộng") { controller.zoomToFitWidth() }
+            Toggle("Vừa chiều rộng", isOn: Binding(
+                get: { controller.canvasOptions.fitWidth },
+                set: { on in if on { controller.zoomToFitWidth() } else { controller.setZoom(controller.effectiveZoom) } }
+            ))
                 .keyboardShortcut("9", modifiers: .command)
         }
     }

@@ -14,7 +14,7 @@ struct DashboardView: View {
     @State private var sort = SortMode.updated
     @State private var tagFilter: String?
     @State private var layout = Layout.grid
-    @State private var onlyRoots = false
+    @State private var onlyRoots = true
 
     enum SortMode: String, CaseIterable, Identifiable {
         case updated, created, title
@@ -149,7 +149,7 @@ struct DashboardView: View {
                 .labelsHidden()
                 .fixedSize()
 
-                Toggle("Chỉ trang gốc", isOn: $onlyRoots)
+                Toggle("Chỉ mục lớn", isOn: $onlyRoots)
                     .toggleStyle(.checkbox)
 
                 Spacer()

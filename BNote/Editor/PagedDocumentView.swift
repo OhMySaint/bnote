@@ -327,7 +327,7 @@ final class PageView: NSView {
         line.stroke()
 
         guard active else { return }
-        let label = "\(Unit.centimeters(value)) cm" as NSString
+        let label = Unit.format(value) as NSString
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.white,
@@ -441,8 +441,8 @@ final class PageView: NSView {
 
 struct CanvasOptions: Equatable {
     var showGrid = false
-    var showMarginGuides = true
-    var showRuler = true
+    var showMarginGuides = false
+    var showRuler = false
     /// Scale the sheet to fill the window width, the way Notion's column follows the window.
     var fitWidth = true
     /// Manual scale, used when `fitWidth` is off.
@@ -786,7 +786,7 @@ final class RulerView: NSView {
         NSColor.textBackgroundColor.setFill()
         NSRect(x: contentStart, y: trackY, width: contentEnd - contentStart, height: 5).fill()
 
-        // Ticks every half centimetre, numbered every centimetre from the text edge.
+        // Ticks in the chosen unit (quarter inch / half centimetre), numbered per whole unit.
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 8),
             .foregroundColor: NSColor.secondaryLabelColor,
@@ -795,20 +795,23 @@ final class RulerView: NSView {
         let ticks = NSBezierPath()
         ticks.lineWidth = 0.5
 
-        var half = 0
+        let unit = Unit.current
+        let subdivisions = unit == .inch ? 4 : 2
+        let step = unit.points / CGFloat(subdivisions)
+        var tick = 0
         var point = config.margins.left
         while point <= config.size.width - config.margins.right + 0.5 {
             let position = x(forPagePoint: point).rounded() + 0.25
-            let isWhole = half % 2 == 0
+            let isWhole = tick % subdivisions == 0
             ticks.move(to: NSPoint(x: position, y: bounds.height - 13))
             ticks.line(to: NSPoint(x: position, y: bounds.height - (isWhole ? 18 : 16)))
             if isWhole {
-                let label = "\(half / 2)" as NSString
+                let label = "\(tick / subdivisions)" as NSString
                 let size = label.size(withAttributes: attributes)
                 label.draw(at: NSPoint(x: position - size.width / 2, y: 1), withAttributes: attributes)
             }
-            half += 1
-            point += Unit.centimeter / 2
+            tick += 1
+            point += step
         }
         ticks.stroke()
 
@@ -841,7 +844,7 @@ final class RulerView: NSView {
 
         guard active else { return }
         let value = edge == .left ? config.margins.left : config.margins.right
-        let label = "\(Unit.centimeters(value)) cm" as NSString
+        let label = Unit.format(value) as NSString
         let labelAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.white,
