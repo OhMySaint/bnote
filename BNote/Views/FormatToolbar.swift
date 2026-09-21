@@ -4,8 +4,8 @@ import SwiftUI
 struct FormatToolbar: View {
     @ObservedObject var controller: DocumentController
     @State private var sizeText = "13"
-    @State private var textColor = Color.primary
-    @State private var highlightColor = Color.yellow
+    @State private var showTextPalette = false
+    @State private var showHighlightPalette = false
 
     private static let commonFonts = [
         "Helvetica Neue", "Arial", "Times New Roman", "Georgia", "Verdana",
@@ -139,17 +139,25 @@ struct FormatToolbar: View {
     }
 
     private var colorControls: some View {
-        HStack(spacing: 4) {
-            ColorPicker(selection: $textColor, supportsOpacity: false) { EmptyView() }
-                .labelsHidden()
-                .onChange(of: textColor) { _, color in controller.setTextColor(NSColor(color)) }
-                .help("Màu chữ")
-            ColorPicker(selection: $highlightColor, supportsOpacity: false) { EmptyView() }
-                .labelsHidden()
-                .onChange(of: highlightColor) { _, color in controller.setHighlight(NSColor(color)) }
-                .help("Màu nền chữ")
-            ToolButton(icon: "paintbrush", isOn: false, help: "Bỏ màu nền") {
-                controller.setHighlight(nil)
+        HStack(spacing: 2) {
+            ColorWell(icon: "character", color: controller.format.textColor, help: "Màu chữ") {
+                showTextPalette.toggle()
+            }
+            .popover(isPresented: $showTextPalette, arrowEdge: .bottom) {
+                ColorSwatchPicker(kind: .text, current: controller.format.textColor) { color in
+                    controller.setTextColor(color ?? .textColor)
+                    showTextPalette = false
+                }
+            }
+
+            ColorWell(icon: "highlighter", color: controller.format.highlight, help: "Màu nền chữ") {
+                showHighlightPalette.toggle()
+            }
+            .popover(isPresented: $showHighlightPalette, arrowEdge: .bottom) {
+                ColorSwatchPicker(kind: .highlight, current: controller.format.highlight) { color in
+                    controller.setHighlight(color)
+                    showHighlightPalette = false
+                }
             }
         }
     }
@@ -242,6 +250,33 @@ private struct ToolGroup<Content: View>: View {
             .padding(.horizontal, 5)
             .frame(height: 28)
             .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 7))
+    }
+}
+
+/// Icon with a colour bar underneath, like the A / highlighter buttons in Docs.
+private struct ColorWell: View {
+    let icon: String
+    let color: NSColor?
+    let help: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(color.map { Color(nsColor: $0) } ?? Color.primary.opacity(0.35))
+                    .frame(width: 14, height: 3)
+            }
+            .frame(width: 24, height: 22)
+            .background(hovering ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
     }
 }
 

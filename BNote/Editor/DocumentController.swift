@@ -13,6 +13,9 @@ struct FormatState: Equatable {
     var style: TextStyle = .body
     var list: ListKind = .none
     var lineHeight: CGFloat = 1.0
+    /// nil means the automatic text colour / no highlight.
+    var textColor: NSColor?
+    var highlight: NSColor?
 }
 
 /// Owns the shared text storage for the whole app and applies every formatting
@@ -196,6 +199,10 @@ final class DocumentController: NSObject, ObservableObject {
         state.italic = traits.contains(.italicFontMask)
         state.underline = (attributes[.underlineStyle] as? Int ?? 0) != 0
         state.strikethrough = (attributes[.strikethroughStyle] as? Int ?? 0) != 0
+        if let color = attributes[.foregroundColor] as? NSColor, color != NSColor.textColor {
+            state.textColor = color
+        }
+        state.highlight = attributes[.backgroundColor] as? NSColor
 
         let paragraph = attributes[.paragraphStyle] as? NSParagraphStyle
         state.alignment = paragraph?.alignment ?? .left
