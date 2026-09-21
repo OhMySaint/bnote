@@ -1148,6 +1148,15 @@ extension DocumentController: NSTextViewDelegate {
     /// Enter inside a list continues it; Enter on an empty item leaves the list.
     func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
         noteEditForSlashDismissal(at: affectedCharRange)
+
+        // Last line of defence: an input method may hand Return/Tab over as
+        // plain text instead of a command while the "/" menu is open.
+        if isSlashMenuOpen, let replacementString, replacementString == "\n" || replacementString == "\t" {
+            finishComposition(in: textView)
+            commitSlashSelection()
+            return false
+        }
+
         guard replacementString == "\n", affectedCharRange.length == 0 else { return true }
         let string = textStorage.string as NSString
         guard string.length > 0, affectedCharRange.location > 0 else { return true }

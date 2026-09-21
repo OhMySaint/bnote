@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+/// The popup must never become key, or the text view stops receiving keys.
+/// SwiftUI hosting inside a panel can otherwise request it.
+private final class NonKeyPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
 /// Floating list shown next to the caret while the "/" menu is active. It never
 /// takes key focus, so typing keeps filtering the list in the text view.
 final class SlashMenuPanel {
@@ -56,7 +63,7 @@ final class SlashMenuPanel {
 
     private func existingPanel() -> NSPanel {
         if let panel { return panel }
-        let panel = NSPanel(
+        let panel = NonKeyPanel(
             contentRect: NSRect(x: 0, y: 0, width: 292, height: 300),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
