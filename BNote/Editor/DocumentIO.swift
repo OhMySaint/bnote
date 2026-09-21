@@ -143,7 +143,9 @@ enum DocumentIO {
         try write(attributed: attributed, format: format, to: url, config: config)
     }
 
-    static func write(attributed: NSAttributedString, format: DocumentFormat, to url: URL, config: PageConfig) throws {
+    static func write(attributed original: NSAttributedString, format: DocumentFormat, to url: URL, config: PageConfig) throws {
+        // Frames only render in our own layout; PDF keeps them, the rest get a flat stand-in.
+        let attributed = format == .pdf ? original : DocumentStorage.flattenedForExport(original)
         let range = NSRange(location: 0, length: attributed.length)
         switch format {
         case .rtf:

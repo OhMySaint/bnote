@@ -211,10 +211,7 @@ struct ContentView: View {
         var last: Note?
         for document in documents {
             let note = Note(title: document.title, sortIndex: (notes.map(\.sortIndex).max() ?? 0) + 1)
-            note.rtfData = document.attributed.rtfd(
-                from: NSRange(location: 0, length: document.attributed.length),
-                documentAttributes: [.documentType: NSAttributedString.DocumentType.rtfd]
-            )
+            note.rtfData = DocumentStorage.data(from: document.attributed)
             note.content = document.attributed.string
             context.insert(note)
             last = note

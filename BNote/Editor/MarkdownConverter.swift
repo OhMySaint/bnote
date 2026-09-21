@@ -93,6 +93,8 @@ enum MarkdownConverter {
 
             if let url = attributes[.link] as? URL {
                 text = "[\(text)](\(url.absoluteString))"
+            } else if let link = attributes[.link] as? String {
+                text = "[\(text)](\(link))"
             }
             output += text
         }

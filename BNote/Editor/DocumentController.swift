@@ -122,15 +122,11 @@ final class DocumentController: NSObject, ObservableObject {
     }
 
     func snapshot() -> (data: Data, plainText: String) {
-        let range = NSRange(location: 0, length: textStorage.length)
-        let data = textStorage.rtfd(from: range, documentAttributes: [.documentType: NSAttributedString.DocumentType.rtfd])
-            ?? Data()
-        return (data, textStorage.string)
+        (DocumentStorage.data(from: textStorage), textStorage.string)
     }
 
     static func attributedString(from data: Data) -> NSAttributedString? {
-        if let rtfd = NSAttributedString(rtfd: data, documentAttributes: nil) { return rtfd }
-        return NSAttributedString(rtf: data, documentAttributes: nil)
+        DocumentStorage.attributedString(from: data)
     }
 
     var attributedCopy: NSAttributedString {
@@ -180,6 +176,30 @@ final class DocumentController: NSObject, ObservableObject {
         scheduleSave()
     }
 
+    /// Typing path: the per-keystroke work is the cheap part (menu, code
+    /// colours); pagination, list numbering and the outline / word count run
+    /// shortly after the burst of keys, so a long document stays responsive.
+    private var derivedUpdateScheduled = false
+
+    func documentDidChangeFromTyping() {
+        guard !isLoading else { return }
+        revertEmptyHeadingIfNeeded()
+        if let caret = activeTextView?.selectedRange().location {
+            highlightCode(around: max(0, caret - 1))
+        }
+        updateSlashMenu()
+        scheduleSave()
+        guard !derivedUpdateScheduled else { return }
+        derivedUpdateScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+            guard let self else { return }
+            derivedUpdateScheduled = false
+            documentView?.updatePagination()
+            renumberLists()
+            refreshDerivedState()
+        }
+    }
+
     private func scheduleSave() {
         saveWork?.cancel()
         if onSave != nil { hasUnsavedChanges = true }
@@ -201,12 +221,21 @@ final class DocumentController: NSObject, ObservableObject {
         hasUnsavedChanges = false
     }
 
+    #if DEBUG
+    func renumberListsForProfiling() { renumberLists() }
+    func refreshDerivedStateForProfiling() { refreshDerivedState() }
+    #endif
+
     private func refreshDerivedState() {
         pageCount = documentView?.pageCount ?? 1
         outline = buildOutline()
-        let text = textStorage.string
-        characterCount = text.count
-        wordCount = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+        let text = textStorage.string as NSString
+        characterCount = text.length
+        var words = 0
+        text.enumerateSubstrings(in: NSRange(location: 0, length: text.length), options: [.byWords, .substringNotRequired]) { _, _, _, _ in
+            words += 1
+        }
+        wordCount = words
     }
 
     func refreshFormatState() {
@@ -1116,12 +1145,7 @@ extension DocumentController {
 
     func insertQuote() {
         updateParagraphs { style in
-            let block = NSTextBlock()
-            block.setValue(100, type: .percentageValueType, for: .width)
-            block.setBorderColor(NSColor.tertiaryLabelColor, for: .minX)
-            block.setWidth(3, type: .absoluteValueType, for: .border, edge: .minX)
-            block.setWidth(12, type: .absoluteValueType, for: .padding, edge: .minX)
-            style.textBlocks = [block]
+            style.textBlocks = [Frames.quote()]
             style.paragraphSpacing = 8
             style.paragraphSpacingBefore = 8
         }
@@ -1168,15 +1192,7 @@ extension DocumentController {
 
     private func insertCalloutDecoration() {
         updateParagraphs { style in
-            let block = NSTextBlock()
-            block.setValue(100, type: .percentageValueType, for: .width)
-            block.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.16)
-            block.setBorderColor(NSColor.systemOrange.withAlphaComponent(0.6), for: .minX)
-            block.setWidth(3, type: .absoluteValueType, for: .border, edge: .minX)
-            for edge in [NSRectEdge.minX, .maxX, .minY, .maxY] {
-                block.setWidth(9, type: .absoluteValueType, for: .padding, edge: edge)
-            }
-            style.textBlocks = [block]
+            style.textBlocks = [Frames.callout()]
             style.firstLineHeadIndent = 0
             style.headIndent = 0
             style.tabStops = []
@@ -1628,7 +1644,7 @@ extension DocumentController {
 
 extension DocumentController: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
-        documentDidChange()
+        documentDidChangeFromTyping()
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
