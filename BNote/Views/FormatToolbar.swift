@@ -9,30 +9,28 @@ struct FormatToolbar: View {
 
     private static let commonFonts = [
         "Helvetica Neue", "Arial", "Times New Roman", "Georgia", "Verdana",
-        "Courier New", "Menlo", "SF Pro", "Avenir Next", "Palatino",
+        "Courier New", "Menlo", "Avenir Next", "Palatino",
     ]
     private static let allFamilies = NSFontManager.shared.availableFontFamilies
     private static let sizes: [CGFloat] = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 36, 48, 60, 72]
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                styleMenu
-                separator
-                fontMenu
-                sizeControls
-                separator
-                traitButtons
-                separator
-                colorControls
-                separator
-                alignmentMenu
-                listButtons
-                indentButtons
-                separator
-                lineSpacingMenu
-                insertMenu
-                pageMenu
+            HStack(spacing: 10) {
+                group { styleMenu }
+                group {
+                    fontMenu
+                    sizeControls
+                }
+                group { traitButtons }
+                group { colorControls }
+                group { alignmentButtons }
+                group {
+                    listButtons
+                    indentButtons
+                    lineSpacingMenu
+                }
+                group { insertMenu }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -41,12 +39,13 @@ struct FormatToolbar: View {
         .onChange(of: controller.format.fontSize) { _, size in
             sizeText = size == size.rounded() ? "\(Int(size))" : String(format: "%.1f", size)
         }
-        .onAppear {
-            sizeText = "\(Int(controller.format.fontSize))"
-        }
+        .onAppear { sizeText = "\(Int(controller.format.fontSize))" }
     }
 
-    private var separator: some View {
+    /// One cluster of related controls, separated by a hairline.
+    @ViewBuilder
+    private func group(@ViewBuilder content: () -> some View) -> some View {
+        HStack(spacing: 4) { content() }
         Divider().frame(height: 18)
     }
 
@@ -64,7 +63,7 @@ struct FormatToolbar: View {
             }
         } label: {
             Text(controller.format.style.label)
-                .frame(width: 88, alignment: .leading)
+                .frame(width: 86, alignment: .leading)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -86,7 +85,7 @@ struct FormatToolbar: View {
         } label: {
             Text(controller.format.fontFamily)
                 .lineLimit(1)
-                .frame(width: 118, alignment: .leading)
+                .frame(width: 112, alignment: .leading)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -94,17 +93,14 @@ struct FormatToolbar: View {
     }
 
     private var sizeControls: some View {
-        HStack(spacing: 2) {
-            Button {
-                controller.nudgeFontSize(by: -1)
-            } label: {
-                Image(systemName: "minus")
-            }
-            .buttonStyle(.borderless)
+        HStack(spacing: 1) {
+            Button { controller.nudgeFontSize(by: -1) } label: { Image(systemName: "minus") }
+                .buttonStyle(.borderless)
+                .help("Giảm cỡ chữ (⌘−)")
 
             TextField("", text: $sizeText)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 42)
+                .frame(width: 40)
                 .multilineTextAlignment(.center)
                 .onSubmit {
                     if let value = Double(sizeText.replacingOccurrences(of: ",", with: ".")) {
@@ -123,14 +119,10 @@ struct FormatToolbar: View {
             .menuIndicator(.hidden)
             .fixedSize()
 
-            Button {
-                controller.nudgeFontSize(by: 1)
-            } label: {
-                Image(systemName: "plus")
-            }
-            .buttonStyle(.borderless)
+            Button { controller.nudgeFontSize(by: 1) } label: { Image(systemName: "plus") }
+                .buttonStyle(.borderless)
+                .help("Tăng cỡ chữ (⌘+)")
         }
-        .help("Cỡ chữ")
     }
 
     private var traitButtons: some View {
@@ -147,60 +139,42 @@ struct FormatToolbar: View {
             ToolButton(icon: "strikethrough", isOn: controller.format.strikethrough, help: "Gạch ngang") {
                 controller.toggleStrikethrough()
             }
-            ToolButton(icon: "eraser", isOn: false, help: "Xóa định dạng") {
+            ToolButton(icon: "eraser", isOn: false, help: "Xóa định dạng (⌘\\)") {
                 controller.clearFormatting()
             }
         }
     }
 
     private var colorControls: some View {
-        HStack(spacing: 6) {
-            ColorPicker(selection: $textColor, supportsOpacity: false) {
-                Image(systemName: "character")
-            }
-            .labelsHidden()
-            .frame(width: 34)
-            .onChange(of: textColor) { _, color in
-                controller.setTextColor(NSColor(color))
-            }
-            .help("Màu chữ")
+        HStack(spacing: 4) {
+            ColorPicker(selection: $textColor, supportsOpacity: false) { EmptyView() }
+                .labelsHidden()
+                .onChange(of: textColor) { _, color in controller.setTextColor(NSColor(color)) }
+                .help("Màu chữ")
 
-            ColorPicker(selection: $highlightColor, supportsOpacity: false) {
-                Image(systemName: "highlighter")
-            }
-            .labelsHidden()
-            .frame(width: 34)
-            .onChange(of: highlightColor) { _, color in
-                controller.setHighlight(NSColor(color))
-            }
-            .help("Màu nền chữ")
+            ColorPicker(selection: $highlightColor, supportsOpacity: false) { EmptyView() }
+                .labelsHidden()
+                .onChange(of: highlightColor) { _, color in controller.setHighlight(NSColor(color)) }
+                .help("Màu nền chữ")
 
-            Button {
+            ToolButton(icon: "paintbrush", isOn: false, help: "Bỏ màu nền") {
                 controller.setHighlight(nil)
-            } label: {
-                Image(systemName: "highlighter")
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 7, weight: .bold))
-                    }
             }
-            .buttonStyle(.borderless)
-            .help("Bỏ màu nền")
         }
     }
 
-    private var alignmentMenu: some View {
+    private var alignmentButtons: some View {
         HStack(spacing: 2) {
-            ToolButton(icon: "text.alignleft", isOn: controller.format.alignment == .left, help: "Canh trái (⌘⇧L)") {
+            ToolButton(icon: "text.alignleft", isOn: controller.format.alignment == .left, help: "Canh trái (⇧⌘L)") {
                 controller.setAlignment(.left)
             }
-            ToolButton(icon: "text.aligncenter", isOn: controller.format.alignment == .center, help: "Canh giữa (⌘⇧E)") {
+            ToolButton(icon: "text.aligncenter", isOn: controller.format.alignment == .center, help: "Canh giữa (⇧⌘E)") {
                 controller.setAlignment(.center)
             }
-            ToolButton(icon: "text.alignright", isOn: controller.format.alignment == .right, help: "Canh phải (⌘⇧R)") {
+            ToolButton(icon: "text.alignright", isOn: controller.format.alignment == .right, help: "Canh phải (⇧⌘R)") {
                 controller.setAlignment(.right)
             }
-            ToolButton(icon: "text.justify", isOn: controller.format.alignment == .justified, help: "Canh đều (⌘⇧J)") {
+            ToolButton(icon: "text.justify", isOn: controller.format.alignment == .justified, help: "Canh đều (⇧⌘J)") {
                 controller.setAlignment(.justified)
             }
         }
@@ -208,21 +182,24 @@ struct FormatToolbar: View {
 
     private var listButtons: some View {
         HStack(spacing: 2) {
-            ToolButton(icon: "list.bullet", isOn: controller.format.list == .bullet, help: "Danh sách chấm") {
+            ToolButton(icon: "list.bullet", isOn: controller.format.list == .bullet, help: "Danh sách chấm (⇧⌘8)") {
                 controller.toggleList(.bullet)
             }
-            ToolButton(icon: "list.number", isOn: controller.format.list == .numbered, help: "Danh sách số") {
+            ToolButton(icon: "list.number", isOn: controller.format.list == .numbered, help: "Danh sách số (⇧⌘7)") {
                 controller.toggleList(.numbered)
+            }
+            ToolButton(icon: "checklist", isOn: controller.format.list == .todo, help: "Việc cần làm (⇧⌘9)") {
+                controller.toggleList(.todo)
             }
         }
     }
 
     private var indentButtons: some View {
         HStack(spacing: 2) {
-            ToolButton(icon: "decrease.indent", isOn: false, help: "Giảm thụt lề") {
+            ToolButton(icon: "decrease.indent", isOn: false, help: "Giảm thụt lề (⌘[)") {
                 controller.changeIndent(by: -EditorDefaults.tabIndent)
             }
-            ToolButton(icon: "increase.indent", isOn: false, help: "Tăng thụt lề") {
+            ToolButton(icon: "increase.indent", isOn: false, help: "Tăng thụt lề (⌘])") {
                 controller.changeIndent(by: EditorDefaults.tabIndent)
             }
         }
@@ -231,73 +208,28 @@ struct FormatToolbar: View {
     private var lineSpacingMenu: some View {
         Menu {
             ForEach([1.0, 1.15, 1.5, 2.0], id: \.self) { value in
-                Button(String(format: "%.2g", value)) {
-                    controller.setLineHeight(CGFloat(value))
-                }
+                Button(String(format: "%.2g", value)) { controller.setLineHeight(CGFloat(value)) }
             }
         } label: {
             Image(systemName: "arrow.up.and.down.text.horizontal")
         }
         .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .fixedSize()
         .help("Giãn dòng")
     }
 
     private var insertMenu: some View {
         Menu {
-            Button("Chèn ảnh…") { insertImage() }
-            Button("Chèn liên kết…") { insertLink() }
-            Button("Ngắt trang") { controller.insertPageBreak() }
+            ForEach(SlashCatalog.all) { command in
+                Button(command.title) { command.perform(controller) }
+            }
         } label: {
-            Image(systemName: "plus.square.on.square")
+            Label("Chèn", systemImage: "plus.square.on.square")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Chèn")
-    }
-
-    private var pageMenu: some View {
-        Menu {
-            Section("Khổ giấy") {
-                ForEach(Paper.allCases) { paper in
-                    Button(paper.label) { controller.config.paper = paper }
-                }
-            }
-            Section("Lề") {
-                ForEach(MarginPreset.all) { preset in
-                    Button(preset.label) { controller.config.margin = preset.value }
-                }
-            }
-        } label: {
-            Label(controller.config.paper.label, systemImage: "doc.plaintext")
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help("Thiết lập trang")
-    }
-
-    // MARK: - Actions
-
-    private func insertImage() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Chèn"
-        guard panel.runModal() == .OK, let url = panel.url, let image = NSImage(contentsOf: url) else { return }
-        controller.insertImage(image)
-    }
-
-    private func insertLink() {
-        let alert = NSAlert()
-        alert.messageText = "Chèn liên kết"
-        alert.informativeText = "Nhập địa chỉ cho phần văn bản đang chọn."
-        alert.addButton(withTitle: "Chèn")
-        alert.addButton(withTitle: "Hủy")
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-        field.placeholderString = "https://"
-        alert.accessoryView = field
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        controller.setLink(field.stringValue)
+        .help("Chèn khối — hoặc gõ / trong tài liệu")
     }
 }
 

@@ -12,6 +12,7 @@ final class AppActions {
     var importDocuments: (() -> Void)?
     var export: ((DocumentFormat) -> Void)?
     var toggleOutline: (() -> Void)?
+    var showPageSetup: (() -> Void)?
     var printDocument: (() -> Void)?
 }
 
@@ -84,6 +85,14 @@ struct BNoteCommands: Commands {
                     .keyboardShortcut("8", modifiers: [.command, .shift])
                 Button("Danh sách số") { controller.toggleList(.numbered) }
                     .keyboardShortcut("7", modifiers: [.command, .shift])
+                Button("Việc cần làm") { controller.toggleList(.todo) }
+                    .keyboardShortcut("9", modifiers: [.command, .shift])
+            }
+
+            Menu("Chèn khối") {
+                ForEach(SlashCatalog.all) { command in
+                    Button(command.title) { command.perform(controller) }
+                }
             }
 
             Divider()
@@ -101,8 +110,21 @@ struct BNoteCommands: Commands {
         }
 
         CommandGroup(after: .sidebar) {
-            Button("Ẩn/hiện mục lục") { actions.toggleOutline?() }
+            Button("Ẩn/hiện bảng bên phải") { actions.toggleOutline?() }
                 .keyboardShortcut("o", modifiers: [.command, .control])
+            Button("Thiết lập trang…") { actions.showPageSetup?() }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+            Divider()
+            Button("Thước kẻ") { controller.canvasOptions.showRuler.toggle() }
+                .keyboardShortcut("r", modifiers: [.command, .control])
+            Button("Lưới ô vuông") { controller.canvasOptions.showGrid.toggle() }
+                .keyboardShortcut("g", modifiers: [.command, .control])
+            Button("Đường biên lề") { controller.canvasOptions.showMarginGuides.toggle() }
+            Divider()
+            Button("Phóng to") { controller.canvasOptions.zoom = min(2.5, controller.canvasOptions.zoom + 0.1) }
+            Button("Thu nhỏ") { controller.canvasOptions.zoom = max(0.5, controller.canvasOptions.zoom - 0.1) }
+            Button("Cỡ thật") { controller.canvasOptions.zoom = 1 }
+                .keyboardShortcut("0", modifiers: .command)
         }
     }
 

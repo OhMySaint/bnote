@@ -177,10 +177,10 @@ enum DocumentIO {
     private static func writePDF(attributed: NSAttributedString, to url: URL, config: PageConfig) throws {
         let info = NSPrintInfo(dictionary: [:])
         info.paperSize = config.size
-        info.topMargin = config.margin
-        info.bottomMargin = config.margin
-        info.leftMargin = config.margin
-        info.rightMargin = config.margin
+        info.topMargin = config.margins.top
+        info.bottomMargin = config.margins.bottom
+        info.leftMargin = config.margins.left
+        info.rightMargin = config.margins.right
         info.horizontalPagination = .fit
         info.verticalPagination = .automatic
         info.isVerticallyCentered = false

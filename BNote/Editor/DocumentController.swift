@@ -32,13 +32,26 @@ final class DocumentController: NSObject, ObservableObject {
     @Published var config = PageConfig() {
         didSet {
             guard config != oldValue else { return }
-            documentView?.applyConfig(config)
+            documentView?.applyConfig(config, options: canvasOptions)
+        }
+    }
+    @Published var canvasOptions = CanvasOptions() {
+        didSet {
+            guard canvasOptions != oldValue else { return }
+            documentView?.applyConfig(config, options: canvasOptions)
         }
     }
 
     weak var documentView: PagedDocumentView?
     /// Called (debounced) with flattened RTFD + plain text whenever the document changes.
     var onSave: ((Data, String) -> Void)?
+
+    let slashModel = SlashMenuModel()
+    private lazy var slashPanel = SlashMenuPanel(model: slashModel)
+    /// Character offset of the "/" that opened the block menu.
+    private(set) var slashTrigger: Int?
+    /// A "/" the user typed past or dismissed; it stays closed until the next one.
+    private var slashDismissedTrigger: Int?
 
     private var isLoading = false
     private var isRenumbering = false
@@ -47,6 +60,9 @@ final class DocumentController: NSObject, ObservableObject {
     override init() {
         super.init()
         textStorage.addLayoutManager(layoutManager)
+        slashModel.onPick = { [weak self] command in
+            self?.runSlashCommand(command)
+        }
     }
 
     // MARK: - Document lifecycle
@@ -63,8 +79,9 @@ final class DocumentController: NSObject, ObservableObject {
         }
 
         textStorage.setAttributedString(attributed)
+        closeSlashMenu()
         self.config = config
-        documentView?.applyConfig(config)
+        documentView?.applyConfig(config, options: canvasOptions)
         documentView?.resetUndo()
         refreshDerivedState()
         refreshFormatState()
@@ -122,6 +139,7 @@ final class DocumentController: NSObject, ObservableObject {
         documentView?.updatePagination()
         renumberLists()
         refreshDerivedState()
+        updateSlashMenu()
         scheduleSave()
     }
 
@@ -215,11 +233,19 @@ final class DocumentController: NSObject, ObservableObject {
         var location = min(range.location, string.length)
         let end = min(max(range.location + range.length, range.location), string.length)
         repeat {
-            let paragraph = string.paragraphRange(for: NSRange(location: min(location, string.length - 1), length: 0))
+            let paragraph = paragraphRange(at: location)
             ranges.append(paragraph)
             location = paragraph.upperBound
         } while location < end
         return ranges
+    }
+
+    /// Paragraph containing `location`. Unlike a clamped lookup this still
+    /// answers the empty last paragraph when the caret sits after a trailing
+    /// newline at the end of the document.
+    func paragraphRange(at location: Int) -> NSRange {
+        let string = textStorage.string as NSString
+        return string.paragraphRange(for: NSRange(location: max(0, min(location, string.length)), length: 0))
     }
 
     private func enclosingParagraphRange(for range: NSRange) -> NSRange {
@@ -465,6 +491,9 @@ final class DocumentController: NSObject, ObservableObject {
 
     private func listInfo(in paragraph: String) -> (kind: ListKind, markerLength: Int, number: Int)? {
         if paragraph.hasPrefix("•\t") { return (.bullet, 2, 0) }
+        if paragraph.hasPrefix("\(Checkbox.unchecked)\t") || paragraph.hasPrefix("\(Checkbox.checked)\t") {
+            return (.todo, 2, 0)
+        }
         var digits = ""
         for character in paragraph {
             if character.isNumber { digits.append(character) } else { break }
@@ -506,7 +535,7 @@ final class DocumentController: NSObject, ObservableObject {
                 }
                 if !alreadyList {
                     // renumberLists() fixes the ordinals afterwards.
-                    let marker = kind == .bullet ? "•\t" : "1.\t"
+                    let marker = kind.marker
                     let attributes = textStorage.length > range.location
                         ? textStorage.attributes(at: range.location, effectiveRange: nil)
                         : EditorDefaults.bodyAttributes
@@ -544,13 +573,14 @@ final class DocumentController: NSObject, ObservableObject {
         while location < string.length {
             let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
             let text = string.substring(with: paragraph)
-            if let info = listInfo(in: text), info.kind == .numbered {
+            let info = listInfo(in: text)
+            if let info, info.kind == .numbered {
                 counter += 1
                 if info.number != counter {
                     let markerRange = NSRange(location: paragraph.location, length: info.markerLength)
                     replacements.append((markerRange, "\(counter).\t"))
                 }
-            } else if listInfo(in: text)?.kind != .bullet, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            } else if info == nil, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 counter = 0
             }
             location = paragraph.upperBound
@@ -635,6 +665,403 @@ final class DocumentController: NSObject, ObservableObject {
     }
 }
 
+// MARK: - Slash menu
+
+extension DocumentController {
+    /// Opens while the caret sits right after a "/" that starts a word.
+    func updateSlashMenu() {
+        guard let textView = activeTextView, textView.selectedRange().length == 0 else {
+            closeSlashMenu()
+            return
+        }
+        let string = textStorage.string as NSString
+        let caret = textView.selectedRange().location
+        guard string.length > 0, caret <= string.length, caret > 0 else {
+            closeSlashMenu()
+            return
+        }
+
+        // The query may contain spaces ("/dau muc"), so scan back to the "/" itself
+        // and stop only at a line break.
+        let paragraph = paragraphRange(at: caret)
+        var slash: Int?
+        var index = caret - 1
+        while index >= paragraph.location, caret - index <= 32 {
+            let character = string.character(at: index)
+            if character == 47 { // "/"
+                slash = index
+                break
+            }
+            if let scalar = UnicodeScalar(character), CharacterSet.newlines.contains(scalar) {
+                break
+            }
+            index -= 1
+        }
+
+        guard let slash else {
+            closeSlashMenu()
+            return
+        }
+        // "/" must start a word, and the query must not start with a space.
+        if slash > paragraph.location {
+            let previous = string.character(at: slash - 1)
+            guard let scalar = UnicodeScalar(previous), CharacterSet.whitespacesAndNewlines.contains(scalar) else {
+                closeSlashMenu()
+                return
+            }
+        }
+        if caret > slash + 1 {
+            let next = string.character(at: slash + 1)
+            if let scalar = UnicodeScalar(next), CharacterSet.whitespaces.contains(scalar) {
+                closeSlashMenu()
+                return
+            }
+        }
+
+        if let dismissed = slashDismissedTrigger, dismissed != slash {
+            slashDismissedTrigger = nil
+        }
+        guard slashDismissedTrigger != slash else {
+            closeSlashMenu()
+            return
+        }
+
+        let query = string.substring(with: NSRange(location: slash + 1, length: caret - slash - 1))
+        let matches = SlashCatalog.filter(query: query)
+        guard !matches.isEmpty else {
+            // Typing past the last match dismisses the menu until the next "/".
+            slashDismissedTrigger = slash
+            closeSlashMenu()
+            return
+        }
+
+        let isNew = slashTrigger != slash
+        slashTrigger = slash
+        slashModel.query = query
+        if slashModel.commands.map(\.id) != matches.map(\.id) {
+            slashModel.commands = matches
+            slashModel.selection = 0
+            slashPanel.resize()
+        } else if isNew {
+            slashModel.selection = 0
+        }
+        slashModel.selection = min(slashModel.selection, matches.count - 1)
+
+        // Menu state stands on its own; the panel only appears once the caret
+        // can be located on screen.
+        if let caretRect = caretScreenRect() {
+            slashPanel.show(near: caretRect, parent: textView.window)
+        }
+    }
+
+    func closeSlashMenu() {
+        guard slashTrigger != nil || slashPanel.isVisible else { return }
+        slashTrigger = nil
+        slashPanel.hide()
+    }
+
+    /// Escape: close and keep it closed for this "/".
+    func dismissSlashMenu() {
+        slashDismissedTrigger = slashTrigger
+        closeSlashMenu()
+    }
+
+    var isSlashMenuOpen: Bool { slashTrigger != nil && !slashModel.commands.isEmpty }
+
+    func moveSlashSelection(_ delta: Int) {
+        guard !slashModel.commands.isEmpty else { return }
+        let count = slashModel.commands.count
+        slashModel.selection = (slashModel.selection + delta + count) % count
+    }
+
+    func commitSlashSelection() {
+        guard slashModel.commands.indices.contains(slashModel.selection) else { return }
+        runSlashCommand(slashModel.commands[slashModel.selection])
+    }
+
+    func runSlashCommand(_ command: SlashCommand) {
+        guard let textView = activeTextView, let trigger = slashTrigger else { return }
+        let caret = textView.selectedRange().location
+        closeSlashMenu()
+
+        let typed = NSRange(location: trigger, length: max(0, min(caret, textStorage.length) - trigger))
+        if typed.length > 0, textView.shouldChangeText(in: typed, replacementString: "") {
+            textStorage.beginEditing()
+            textStorage.replaceCharacters(in: typed, with: "")
+            textStorage.endEditing()
+            textView.didChangeText()
+            textView.setSelectedRange(NSRange(location: trigger, length: 0))
+        }
+
+        command.perform(self)
+        documentDidChange()
+        refreshFormatState()
+    }
+
+    private func caretScreenRect() -> NSRect? {
+        guard let textView = activeTextView,
+              let container = textView.textContainer,
+              let window = textView.window
+        else { return nil }
+        let caret = textView.selectedRange()
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: caret, actualCharacterRange: nil)
+        var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: container)
+        if rect.width < 1 { rect.size.width = 2 }
+        if rect.height < 1 { rect.size.height = 16 }
+        return window.convertToScreen(textView.convert(rect, to: nil))
+    }
+}
+
+// MARK: - Notion-style blocks
+
+extension DocumentController {
+    /// Inserts `block` on a line of its own, adding a newline first when the
+    /// current paragraph already has content.
+    private func insertBlock(_ block: NSAttributedString) {
+        guard let textView = activeTextView else { return }
+        let caret = textView.selectedRange()
+        let string = textStorage.string as NSString
+
+        let insertion = NSMutableAttributedString()
+        if string.length > 0 {
+            let paragraph = paragraphRange(at: caret.location)
+            let text = string.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                insertion.append(NSAttributedString(string: "\n", attributes: EditorDefaults.bodyAttributes))
+            }
+        }
+        insertion.append(block)
+
+        mutate(range: caret, replacement: insertion.string) {
+            textStorage.replaceCharacters(in: caret, with: insertion)
+        }
+        let end = min(caret.location + insertion.length, textStorage.length)
+        textView.setSelectedRange(NSRange(location: end, length: 0))
+        textView.typingAttributes = EditorDefaults.bodyAttributes
+    }
+
+    func insertQuote() {
+        updateParagraphs { style in
+            let block = NSTextBlock()
+            block.setValue(100, type: .percentageValueType, for: .width)
+            block.setBorderColor(NSColor.tertiaryLabelColor, for: .minX)
+            block.setWidth(3, type: .absoluteValueType, for: .border, edge: .minX)
+            block.setWidth(12, type: .absoluteValueType, for: .padding, edge: .minX)
+            style.textBlocks = [block]
+            style.paragraphSpacing = 8
+            style.paragraphSpacingBefore = 8
+        }
+        styleCurrentParagraphs { attributes in
+            let font = attributes[.font] as? NSFont ?? EditorDefaults.bodyFont
+            attributes[.font] = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+            attributes[.foregroundColor] = NSColor.secondaryLabelColor
+        }
+    }
+
+    func insertCallout() {
+        guard let textView = activeTextView else { return }
+        let string = textStorage.string as NSString
+        guard string.length > 0 else {
+            insertBlock(NSAttributedString(string: "💡 ", attributes: EditorDefaults.bodyAttributes))
+            insertCalloutDecoration()
+            return
+        }
+
+        let caret = textView.selectedRange().location
+        let paragraph = paragraphRange(at: caret)
+        let text = string.substring(with: paragraph)
+        guard !text.hasPrefix("💡") else { return }
+
+        // A callout is not a list item; drop any marker before decorating.
+        if let list = listInfo(in: text) {
+            let markerRange = NSRange(location: paragraph.location, length: list.markerLength)
+            mutate(range: markerRange, replacement: "") {
+                textStorage.replaceCharacters(in: markerRange, with: "")
+            }
+        }
+
+        let anchor = paragraph.location
+        let attributes = textStorage.length > anchor
+            ? textStorage.attributes(at: anchor, effectiveRange: nil)
+            : EditorDefaults.bodyAttributes
+        let prefix = NSAttributedString(string: "💡 ", attributes: attributes)
+        mutate(range: NSRange(location: anchor, length: 0), replacement: prefix.string) {
+            textStorage.insert(prefix, at: anchor)
+        }
+        textView.setSelectedRange(NSRange(location: min(caret + prefix.length, textStorage.length), length: 0))
+        insertCalloutDecoration()
+    }
+
+    private func insertCalloutDecoration() {
+        updateParagraphs { style in
+            let block = NSTextBlock()
+            block.setValue(100, type: .percentageValueType, for: .width)
+            block.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.16)
+            block.setBorderColor(NSColor.systemOrange.withAlphaComponent(0.6), for: .minX)
+            block.setWidth(3, type: .absoluteValueType, for: .border, edge: .minX)
+            for edge in [NSRectEdge.minX, .maxX, .minY, .maxY] {
+                block.setWidth(9, type: .absoluteValueType, for: .padding, edge: edge)
+            }
+            style.textBlocks = [block]
+            style.firstLineHeadIndent = 0
+            style.headIndent = 0
+            style.tabStops = []
+            style.paragraphSpacing = 8
+            style.paragraphSpacingBefore = 8
+        }
+    }
+
+    func insertDivider() {
+        let width = config.contentSize.width
+        let image = NSImage(size: NSSize(width: width, height: 11))
+        image.lockFocus()
+        NSColor.separatorColor.setFill()
+        NSRect(x: 0, y: 5, width: width, height: 1).fill()
+        image.unlockFocus()
+
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        attachment.bounds = NSRect(x: 0, y: 0, width: width, height: 11)
+
+        let block = NSMutableAttributedString(attachment: attachment)
+        block.append(NSAttributedString(string: "\n", attributes: EditorDefaults.bodyAttributes))
+        insertBlock(block)
+    }
+
+    func insertTable(rows: Int, columns: Int) {
+        let table = NSTextTable()
+        table.numberOfColumns = columns
+        table.layoutAlgorithm = .automaticLayoutAlgorithm
+        table.collapsesBorders = true
+        table.hidesEmptyCells = false
+
+        let block = NSMutableAttributedString()
+        for row in 0..<rows {
+            for column in 0..<columns {
+                let cell = NSTextTableBlock(
+                    table: table,
+                    startingRow: row,
+                    rowSpan: 1,
+                    startingColumn: column,
+                    columnSpan: 1
+                )
+                for edge in [NSRectEdge.minX, .maxX, .minY, .maxY] {
+                    cell.setBorderColor(NSColor.separatorColor, for: edge)
+                    cell.setWidth(1, type: .absoluteValueType, for: .border, edge: edge)
+                    cell.setWidth(5, type: .absoluteValueType, for: .padding, edge: edge)
+                }
+                let style = NSMutableParagraphStyle()
+                style.textBlocks = [cell]
+                var attributes = EditorDefaults.bodyAttributes
+                attributes[.paragraphStyle] = style
+                if row == 0 {
+                    attributes[.font] = NSFontManager.shared.convert(EditorDefaults.bodyFont, toHaveTrait: .boldFontMask)
+                }
+                block.append(NSAttributedString(string: "\n", attributes: attributes))
+            }
+        }
+        block.append(NSAttributedString(string: "\n", attributes: EditorDefaults.bodyAttributes))
+        insertBlock(block)
+    }
+
+    func insertToday() {
+        let text = Date().formatted(date: .long, time: .omitted)
+        let attributes = activeTextView?.typingAttributes ?? EditorDefaults.bodyAttributes
+        guard let textView = activeTextView else { return }
+        let caret = textView.selectedRange()
+        mutate(range: caret, replacement: text) {
+            textStorage.replaceCharacters(in: caret, with: NSAttributedString(string: text, attributes: attributes))
+        }
+        textView.setSelectedRange(NSRange(location: min(caret.location + text.count, textStorage.length), length: 0))
+    }
+
+    func insertImageFromPanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Chèn"
+        guard panel.runModal() == .OK, let url = panel.url, let image = NSImage(contentsOf: url) else { return }
+        insertImage(image)
+    }
+
+    func insertLinkFromPanel() {
+        let alert = NSAlert()
+        alert.messageText = "Chèn liên kết"
+        alert.informativeText = "Nhập địa chỉ cho phần văn bản đang chọn."
+        alert.addButton(withTitle: "Chèn")
+        alert.addButton(withTitle: "Hủy")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        field.placeholderString = "https://"
+        alert.accessoryView = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        setLink(field.stringValue)
+    }
+
+    private func styleCurrentParagraphs(_ transform: (inout [NSAttributedString.Key: Any]) -> Void) {
+        guard let textView = activeTextView, textStorage.length > 0 else { return }
+        let string = textStorage.string as NSString
+        let selection = textView.selectedRange()
+        let paragraph = paragraphRange(at: selection.location)
+        let range = NSRange(location: paragraph.location, length: max(0, min(paragraph.length, textStorage.length - paragraph.location)))
+        guard range.length > 0 else { return }
+        mutate(range: range) {
+            textStorage.enumerateAttributes(in: range) { attributes, subrange, _ in
+                var updated = attributes
+                transform(&updated)
+                textStorage.setAttributes(updated, range: subrange)
+            }
+        }
+    }
+
+    // MARK: Checkbox
+
+    /// Returns true when the click landed on a to-do marker and toggled it.
+    func handleCheckboxClick(at point: NSPoint, in textView: NSTextView) -> Bool {
+        guard let container = textView.textContainer, textStorage.length > 0 else { return false }
+        let index = layoutManager.characterIndex(
+            for: point,
+            in: container,
+            fractionOfDistanceBetweenInsertionPoints: nil
+        )
+        let string = textStorage.string as NSString
+        let paragraph = string.paragraphRange(for: NSRange(location: min(index, string.length - 1), length: 0))
+        guard paragraph.length >= 2 else { return false }
+
+        let marker = string.substring(with: NSRange(location: paragraph.location, length: 1))
+        guard marker == String(Checkbox.unchecked) || marker == String(Checkbox.checked) else { return false }
+        guard index <= paragraph.location + 1 else { return false }
+
+        toggleCheckbox(paragraph: paragraph, isChecked: marker == String(Checkbox.checked))
+        return true
+    }
+
+    private func toggleCheckbox(paragraph: NSRange, isChecked: Bool) {
+        guard let textView = activeTextView ?? layoutManager.firstTextView else { return }
+        let replacement = String(isChecked ? Checkbox.unchecked : Checkbox.checked)
+        let markerRange = NSRange(location: paragraph.location, length: 1)
+        let attributes = textStorage.attributes(at: paragraph.location, effectiveRange: nil)
+
+        guard textView.shouldChangeText(in: paragraph, replacementString: nil) else { return }
+        textStorage.beginEditing()
+        textStorage.replaceCharacters(in: markerRange, with: NSAttributedString(string: replacement, attributes: attributes))
+        let body = NSRange(location: paragraph.location + 2, length: max(0, paragraph.length - 2))
+        if body.length > 0, body.upperBound <= textStorage.length {
+            if isChecked {
+                textStorage.removeAttribute(.strikethroughStyle, range: body)
+                textStorage.addAttribute(.foregroundColor, value: NSColor.textColor, range: body)
+            } else {
+                textStorage.addAttributes([
+                    .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                ], range: body)
+            }
+        }
+        textStorage.endEditing()
+        textView.didChangeText()
+        documentDidChange()
+    }
+}
+
 // MARK: - NSTextViewDelegate
 
 extension DocumentController: NSTextViewDelegate {
@@ -644,6 +1071,28 @@ extension DocumentController: NSTextViewDelegate {
 
     func textViewDidChangeSelection(_ notification: Notification) {
         refreshFormatState()
+        updateSlashMenu()
+    }
+
+    /// While the "/" menu is open it owns the arrow keys, Enter and Escape.
+    func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard isSlashMenuOpen else { return false }
+        switch selector {
+        case #selector(NSResponder.moveDown(_:)):
+            moveSlashSelection(1)
+            return true
+        case #selector(NSResponder.moveUp(_:)):
+            moveSlashSelection(-1)
+            return true
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
+            commitSlashSelection()
+            return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            dismissSlashMenu()
+            return true
+        default:
+            return false
+        }
     }
 
     /// Enter inside a list continues it; Enter on an empty item leaves the list.
@@ -652,8 +1101,33 @@ extension DocumentController: NSTextViewDelegate {
         let string = textStorage.string as NSString
         guard string.length > 0, affectedCharRange.location > 0 else { return true }
 
-        let paragraph = string.paragraphRange(for: NSRange(location: min(affectedCharRange.location, string.length - 1), length: 0))
+        let paragraph = paragraphRange(at: affectedCharRange.location)
         let text = string.substring(with: paragraph)
+
+        // Enter on an empty quote / callout line leaves the block, as in Notion.
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // An empty trailing paragraph sits at index == length, where the
+            // storage has no attributes to read.
+            let style = paragraph.location < textStorage.length
+                ? textStorage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+                : textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle
+
+            if let style, !style.textBlocks.isEmpty, !(style.textBlocks.first is NSTextTableBlock) {
+                let plain = NSMutableParagraphStyle()
+                plain.paragraphSpacing = TextStyle.body.spacingAfter
+                if paragraph.length > 0, paragraph.upperBound <= textStorage.length {
+                    guard textView.shouldChangeText(in: paragraph, replacementString: nil) else { return false }
+                    textStorage.beginEditing()
+                    textStorage.addAttribute(.paragraphStyle, value: plain, range: paragraph)
+                    textStorage.endEditing()
+                    textView.didChangeText()
+                }
+                textView.typingAttributes[.paragraphStyle] = plain
+                documentDidChange()
+                return false
+            }
+        }
+
         guard let info = listInfo(in: text) else { return true }
 
         let body = String(text.dropFirst(info.markerLength)).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -677,12 +1151,25 @@ extension DocumentController: NSTextViewDelegate {
             return false
         }
 
-        let marker = info.kind == .bullet ? "•\t" : "\(info.number + 1).\t"
+        let marker: String
+        switch info.kind {
+        case .bullet: marker = "•\t"
+        case .todo: marker = "\(Checkbox.unchecked)\t"
+        default: marker = "\(info.number + 1).\t"
+        }
+
+        // A finished to-do is struck through; the next one starts clean.
+        var continuation = attributes
+        if info.kind == .todo {
+            continuation.removeValue(forKey: .strikethroughStyle)
+            continuation[.foregroundColor] = NSColor.textColor
+        }
+
         guard textView.shouldChangeText(in: affectedCharRange, replacementString: "\n" + marker) else { return false }
         textStorage.beginEditing()
         textStorage.replaceCharacters(
             in: affectedCharRange,
-            with: NSAttributedString(string: "\n" + marker, attributes: attributes)
+            with: NSAttributedString(string: "\n" + marker, attributes: continuation)
         )
         textStorage.endEditing()
         textView.didChangeText()

@@ -10,7 +10,8 @@ struct ContentView: View {
     @State private var selection: PersistentIdentifier?
     @State private var search = ""
     @State private var activeTag: String?
-    @State private var showOutline = true
+    @State private var showInspector = true
+    @State private var inspectorTab = InspectorTab.outline
     @State private var pendingDeletion: Note?
     @State private var errorMessage: String?
 
@@ -51,7 +52,12 @@ struct ContentView: View {
             }
         } detail: {
             if let note = selectedNote {
-                NoteEditorView(note: note, controller: controller, showOutline: $showOutline)
+                NoteEditorView(
+                    note: note,
+                    controller: controller,
+                    showInspector: $showInspector,
+                    inspectorTab: $inspectorTab
+                )
             } else {
                 ContentUnavailableView(
                     "Chưa chọn trang",
@@ -154,8 +160,7 @@ struct ContentView: View {
         copy.rtfData = note.rtfData
         copy.tags = note.tags
         copy.icon = note.icon
-        copy.paperRaw = note.paperRaw
-        copy.margin = note.margin
+        copy.pageConfig = note.pageConfig
         context.insert(copy)
         try? context.save()
         selection = copy.persistentModelID
@@ -205,7 +210,11 @@ struct ContentView: View {
         actions.deleteCurrent = { if let note = selectedNote { requestDelete(note) } }
         actions.importDocuments = { importDocuments() }
         actions.export = { format in export(format) }
-        actions.toggleOutline = { showOutline.toggle() }
+        actions.toggleOutline = { showInspector.toggle() }
+        actions.showPageSetup = {
+            inspectorTab = .page
+            showInspector = true
+        }
         actions.printDocument = {
             controller.saveNow()
             controller.documentView?.printDocument(jobTitle: selectedNote?.displayTitle ?? "BNote")

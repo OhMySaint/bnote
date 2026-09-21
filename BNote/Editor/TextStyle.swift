@@ -92,15 +92,21 @@ enum TextStyle: String, CaseIterable, Identifiable {
 }
 
 enum ListKind {
-    case none, bullet, numbered
+    case none, bullet, numbered, todo
 
     var marker: String {
         switch self {
         case .none: ""
         case .bullet: "•\t"
         case .numbered: "1.\t"
+        case .todo: "☐\t"
         }
     }
+}
+
+enum Checkbox {
+    static let unchecked: Character = "☐"
+    static let checked: Character = "☑"
 }
 
 enum EditorDefaults {

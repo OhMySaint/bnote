@@ -6,14 +6,8 @@ struct OutlinePanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Mục lục")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-                .padding(.bottom, 6)
-
             if controller.outline.isEmpty {
+                Spacer(minLength: 12)
                 Text("Dùng kiểu Đầu mục 1–3 để tạo mục lục.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -40,11 +34,10 @@ struct OutlinePanel: View {
                         }
                     }
                     .padding(.horizontal, 14)
-                    .padding(.bottom, 12)
+                    .padding(.vertical, 12)
                 }
             }
         }
-        .frame(width: 210)
-        .background(.regularMaterial)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

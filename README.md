@@ -13,9 +13,20 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 - Danh sách chấm và danh sách số (tự đánh lại số, Enter tự tạo mục kế tiếp)
 - Chèn ảnh, chèn liên kết, ngắt trang
 
+**Menu "/" kiểu Notion**
+- Gõ `/` giữa tài liệu để mở bảng chèn khối, lọc ngay khi gõ (không dấu vẫn khớp: `/dau muc`)
+- ↑ ↓ chọn, Enter chèn, Esc đóng
+- Khối có sẵn: kiểu đoạn, danh sách, việc cần làm, trích dẫn, ghi chú nổi bật,
+  khối mã, đường kẻ ngang, bảng 3×3, ảnh, liên kết, ngày hôm nay, ngắt trang
+- Việc cần làm: bấm thẳng vào ô vuông để đánh dấu, chữ tự gạch ngang
+- Enter trên dòng trống sẽ thoát khỏi danh sách / trích dẫn / ghi chú nổi bật
+
 **Trang giấy**
 - Phân trang thật: chữ tràn từ trang này sang trang kế tiếp khi gõ
-- Khổ A4 / Letter / Legal / A5, ba mức lề
+- Khổ A4 / Letter / Legal / A5 / A3 / Tabloid, giấy dọc hoặc ngang
+- Lề bốn cạnh chỉnh riêng bằng số cm, hoặc kéo tay trực tiếp trên thước kẻ
+- Thước kẻ, lưới ô vuông nửa centimét, đường biên lề — bật tắt từng thứ
+- Thu phóng 50–250%
 - Đếm số trang, số từ, số ký tự ở thanh trạng thái
 
 **Tổ chức nội dung**
@@ -35,10 +46,13 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 | ⌘B ⌘I ⌘U | Đậm, nghiêng, gạch chân |
 | ⌥⌘1–3, ⌥⌘0 | Đầu mục 1–3, Văn bản |
 | ⇧⌘L E R J | Canh trái, giữa, phải, đều |
-| ⇧⌘8 / ⇧⌘7 | Danh sách chấm / số |
+| ⇧⌘8 ⇧⌘7 ⇧⌘9 | Danh sách chấm / số / việc cần làm |
 | ⌘] ⌘[ | Tăng / giảm thụt lề |
 | ⇧⌘I | Nhập tài liệu |
-| ⌃⌘O | Ẩn/hiện mục lục |
+| ⌃⌘O | Ẩn/hiện bảng bên phải |
+| ⇧⌘P | Mở thiết lập trang |
+| ⌃⌘R / ⌃⌘G | Thước kẻ / lưới ô vuông |
+| ⌘0 | Về cỡ thật 100% |
 
 ## Chạy
 
@@ -55,12 +69,14 @@ BNote/
   BNoteApp.swift              # Scene, menu lệnh, AppActions
   Models/Note.swift           # @Model: trang, quan hệ cha–con, thẻ, khổ giấy
   Models/PageConfig.swift     # Khổ giấy và lề
-  Editor/DocumentController.swift  # Text storage dùng chung, mọi lệnh định dạng
-  Editor/PagedDocumentView.swift   # Canvas nhiều trang, mỗi trang một NSTextView
+  Editor/DocumentController.swift  # Text storage dùng chung, mọi lệnh định dạng, menu /
+  Editor/PagedDocumentView.swift   # Canvas nhiều trang, thước kẻ, lưới, zoom
+  Editor/SlashCommand.swift        # Danh mục lệnh của menu /
+  Editor/SlashMenuPanel.swift      # Bảng nổi cạnh con trỏ
   Editor/TextStyle.swift      # Kiểu đoạn, nhận diện đầu mục cho mục lục
   Editor/DocumentIO.swift     # Nhập/xuất/in
   Editor/MarkdownConverter.swift
-  Views/                      # Sidebar, thanh định dạng, mục lục, editor
+  Views/                      # Sidebar, thanh định dạng, inspector, editor
 ```
 
 Phần soạn thảo dùng nhiều `NSTextView` chia sẻ một `NSLayoutManager`; mỗi trang là một

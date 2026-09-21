@@ -13,7 +13,11 @@ final class Note {
     var sortIndex: Int = 0
     var isExpanded: Bool = true
     var paperRaw: String = Paper.a4.rawValue
-    var margin: Double = 72
+    var orientationRaw: String = PageOrientation.portrait.rawValue
+    var marginTop: Double = 72
+    var marginBottom: Double = 72
+    var marginLeft: Double = 72
+    var marginRight: Double = 72
 
     var parent: Note?
     @Relationship(deleteRule: .cascade, inverse: \Note.parent)
@@ -29,10 +33,25 @@ final class Note {
     }
 
     var pageConfig: PageConfig {
-        get { PageConfig(paper: Paper(rawValue: paperRaw) ?? .a4, margin: margin) }
+        get {
+            PageConfig(
+                paper: Paper(rawValue: paperRaw) ?? .a4,
+                orientation: PageOrientation(rawValue: orientationRaw) ?? .portrait,
+                margins: PageMargins(
+                    top: marginTop,
+                    bottom: marginBottom,
+                    left: marginLeft,
+                    right: marginRight
+                )
+            )
+        }
         set {
             paperRaw = newValue.paper.rawValue
-            margin = newValue.margin
+            orientationRaw = newValue.orientation.rawValue
+            marginTop = newValue.margins.top
+            marginBottom = newValue.margins.bottom
+            marginLeft = newValue.margins.left
+            marginRight = newValue.margins.right
         }
     }
 
