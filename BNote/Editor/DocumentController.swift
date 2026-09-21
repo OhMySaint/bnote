@@ -68,6 +68,8 @@ final class DocumentController: NSObject, ObservableObject {
     private var isRenumbering = false
     /// Set while this controller itself asks the text view for a newline.
     private var isInsertingBreak = false
+    /// A deletion just happened; an emptied heading line should fall back to body text.
+    private var checkEmptyHeadingAfterEdit = false
     private var saveWork: DispatchWorkItem?
 
     override init() {
@@ -104,6 +106,10 @@ final class DocumentController: NSObject, ObservableObject {
         }
 
         textStorage.setAttributedString(attributed)
+        // A fresh document must not inherit the previous one's typing style.
+        for container in layoutManager.textContainers {
+            container.textView?.typingAttributes = EditorDefaults.bodyAttributes
+        }
         highlightAllCode()
         closeSlashMenu()
         slashDismissedTrigger = nil
@@ -163,6 +169,7 @@ final class DocumentController: NSObject, ObservableObject {
 
     func documentDidChange() {
         guard !isLoading else { return }
+        revertEmptyHeadingIfNeeded()
         if let caret = activeTextView?.selectedRange().location {
             highlightCode(around: max(0, caret - 1))
         }
@@ -1487,6 +1494,87 @@ extension DocumentController {
         return pasteFromPasteboard(pasteboard, in: textView)
     }
 
+    // MARK: Markdown shortcuts & heading fallback
+
+    /// Notion-style: what was typed at the start of the line becomes a block.
+    private func applyMarkdownShortcut(before caret: Int, in textView: NSTextView) -> Bool {
+        let string = textStorage.string as NSString
+        let paragraph = paragraphRange(at: caret)
+        guard caret > paragraph.location else { return false }
+        let prefixRange = NSRange(location: paragraph.location, length: caret - paragraph.location)
+        let prefix = string.substring(with: prefixRange)
+
+        let action: (DocumentController) -> Void
+        switch prefix {
+        case "-", "*", "+": action = { $0.toggleList(.bullet) }
+        case "[]", "[ ]": action = { $0.toggleList(.todo) }
+        case "#": action = { $0.apply(style: .heading1) }
+        case "##": action = { $0.apply(style: .heading2) }
+        case "###": action = { $0.apply(style: .heading3) }
+        case ">": action = { $0.insertQuote() }
+        case "```": action = { $0.apply(style: .code) }
+        default:
+            let digits = prefix.dropLast()
+            guard prefix.hasSuffix("."), !digits.isEmpty, digits.allSatisfy(\.isNumber), digits.count <= 3 else { return false }
+            action = { $0.toggleList(.numbered) }
+        }
+
+        // The remainder of the line must be empty: shortcuts only fire on a fresh line.
+        let rest = string.substring(with: NSRange(location: caret, length: paragraph.upperBound - caret))
+        guard rest.trimmingCharacters(in: .newlines).isEmpty else { return false }
+        // Not inside an existing list or code block.
+        guard listInfo(in: string.substring(with: paragraph)) == nil, !isCodeParagraph(at: paragraph.location) else { return false }
+
+        guard textView.shouldChangeText(in: prefixRange, replacementString: "") else { return false }
+        textStorage.beginEditing()
+        textStorage.replaceCharacters(in: prefixRange, with: "")
+        textStorage.endEditing()
+        textView.didChangeText()
+        textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
+        action(self)
+        documentDidChange()
+        refreshFormatState()
+        return true
+    }
+
+    /// After a deletion, a heading line with nothing left on it becomes body text.
+    private func revertEmptyHeadingIfNeeded() {
+        guard checkEmptyHeadingAfterEdit else { return }
+        checkEmptyHeadingAfterEdit = false
+        guard let textView = activeTextView else { return }
+        let string = textStorage.string as NSString
+        let caret = textView.selectedRange().location
+        let paragraph = paragraphRange(at: caret)
+        let text = string.substring(with: paragraph).trimmingCharacters(in: .newlines)
+        guard text.isEmpty else { return }
+
+        let font: NSFont?
+        let style: NSParagraphStyle?
+        if paragraph.location < textStorage.length {
+            font = textStorage.attribute(.font, at: paragraph.location, effectiveRange: nil) as? NSFont
+            style = textStorage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+        } else {
+            font = textView.typingAttributes[.font] as? NSFont
+            style = textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle
+        }
+        let detected = TextStyle.detect(font: font, paragraph: style)
+        guard detected.headerLevel > 0 || detected == .title else { return }
+
+        var body = EditorDefaults.bodyAttributes
+        if let family = font?.familyName {
+            body[.font] = NSFont(name: family, size: EditorDefaults.fontSize) ?? EditorDefaults.bodyFont
+        }
+        if paragraph.length > 0, paragraph.upperBound <= textStorage.length {
+            guard textView.shouldChangeText(in: paragraph, replacementString: nil) else { return }
+            textStorage.beginEditing()
+            textStorage.setAttributes(body, range: paragraph)
+            textStorage.endEditing()
+            textView.didChangeText()
+        }
+        textView.typingAttributes = body
+        refreshFormatState()
+    }
+
     // MARK: Checkbox
 
     /// Returns true when the click landed on a to-do marker and toggled it.
@@ -1576,6 +1664,13 @@ extension DocumentController: NSTextViewDelegate {
         DebugLog.write("shouldChange range=\(affectedCharRange) repl=\((replacementString ?? "<attr>").debugDescription) menuOpen=\(isSlashMenuOpen)")
         if isInsertingBreak { return true }
         noteEditForSlashDismissal(at: affectedCharRange)
+        if replacementString == "", affectedCharRange.length > 0 { checkEmptyHeadingAfterEdit = true }
+
+        // Markdown shortcuts: "- ", "1. ", "[] ", "# ", "> ", "``` " at the start of a line.
+        if replacementString == " ", affectedCharRange.length == 0, !isSlashMenuOpen,
+           applyMarkdownShortcut(before: affectedCharRange.location, in: textView) {
+            return false
+        }
 
         // Last line of defence: an input method may hand Return/Tab over as
         // plain text instead of a command while the "/" menu is open.

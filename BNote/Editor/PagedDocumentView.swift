@@ -206,8 +206,11 @@ final class PageTextView: NSTextView {
               textStorage?.length == 0,
               layoutManager?.textContainers.first === textContainer
         else { return }
+        // Drawn with the current typing font so it matches the caret height
+        // (a Heading 1 caret next to a 13pt placeholder looks broken).
+        let font = (typingAttributes[.font] as? NSFont) ?? EditorDefaults.bodyFont
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: EditorDefaults.bodyFont,
+            .font: font,
             .foregroundColor: NSColor.placeholderTextColor,
         ]
         (placeholder as NSString).draw(at: NSPoint(x: 0, y: 1), withAttributes: attributes)
