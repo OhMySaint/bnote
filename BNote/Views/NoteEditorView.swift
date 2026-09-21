@@ -18,12 +18,14 @@ struct NoteEditorView: View {
             HStack(spacing: 0) {
                 PagedEditor(
                     controller: controller,
-                    header: AnyView(PageHeaderView(note: note, layout: controller.headerLayout)),
+                    // A hosting view made inside the canvas gets no SwiftUI environment,
+                    // so hand it the model container explicitly.
+                    header: AnyView(PageHeaderView(note: note, layout: controller.headerLayout).modelContainer(context.container)),
                     headerHeight: { width in PageHeaderView.height(for: note, width: width) }
                 )
                 if showInspector {
                     Divider()
-                    InspectorPanel(controller: controller, tab: $inspectorTab)
+                    InspectorPanel(controller: controller, tab: $inspectorTab, note: note)
                         .transition(.move(edge: .trailing))
                 }
             }

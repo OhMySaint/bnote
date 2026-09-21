@@ -4,6 +4,7 @@ import SwiftUI
 struct InspectorPanel: View {
     @ObservedObject var controller: DocumentController
     @Binding var tab: InspectorTab
+    var note: Note?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,7 +21,7 @@ struct InspectorPanel: View {
 
             switch tab {
             case .outline: OutlinePanel(controller: controller)
-            case .page: PageSetupPanel(controller: controller)
+            case .page: PageSetupPanel(controller: controller, note: note)
             }
         }
         .frame(width: 236)
@@ -43,6 +44,7 @@ enum InspectorTab: String, CaseIterable, Identifiable {
 
 struct PageSetupPanel: View {
     @ObservedObject var controller: DocumentController
+    var note: Note?
     @State private var showCustomMargins = false
 
     private var unit: MeasurementUnit { Unit.current }
@@ -52,6 +54,12 @@ struct PageSetupPanel: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                if let note {
+                    section("Ảnh bìa") {
+                        CoverControls(note: note)
+                    }
+                }
+
                 section("Khổ giấy") {
                     Picker("", selection: paperBinding) {
                         ForEach(Paper.allCases) { paper in

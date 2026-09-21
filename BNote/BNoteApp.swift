@@ -16,6 +16,9 @@ final class AppActions {
     var toggleFocusMode: (() -> Void)?
     var showDashboard: (() -> Void)?
     var manageTags: (() -> Void)?
+    var setCoverFromFile: (() -> Void)?
+    var setCoverFromClipboard: (() -> Void)?
+    var removeCover: (() -> Void)?
     var printDocument: (() -> Void)?
 }
 
@@ -60,6 +63,15 @@ struct BNoteCommands: Commands {
                     Button(format.label) { actions.export?(format) }
                 }
             }
+        }
+
+        CommandMenu("Trang") {
+            Button("Ảnh bìa: chọn ảnh…") { actions.setCoverFromFile?() }
+            Button("Ảnh bìa: dán từ clipboard") { actions.setCoverFromClipboard?() }
+            Button("Bỏ ảnh bìa") { actions.removeCover?() }
+            Divider()
+            Button("Thiết lập trang…") { actions.showPageSetup?() }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
         }
 
         CommandGroup(replacing: .printItem) {
@@ -126,8 +138,6 @@ struct BNoteCommands: Commands {
         CommandGroup(after: .sidebar) {
             Toggle("Bảng bên phải", isOn: Binding(get: { ui.showInspector }, set: { _ in actions.toggleOutline?() }))
                 .keyboardShortcut("o", modifiers: [.command, .control])
-            Button("Thiết lập trang…") { actions.showPageSetup?() }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
             Toggle("Chế độ tập trung", isOn: Binding(get: { ui.focusMode }, set: { _ in actions.toggleFocusMode?() }))
                 .keyboardShortcut("f", modifiers: [.command, .control])
             Button("Tổng quan") { actions.showDashboard?() }

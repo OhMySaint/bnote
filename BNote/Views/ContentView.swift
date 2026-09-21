@@ -253,6 +253,9 @@ struct ContentView: View {
             ui.showInspector = true
         }
         actions.showDashboard = { selection = nil }
+        actions.setCoverFromFile = { if let note = selectedNote { CoverControls.pick(into: note) } }
+        actions.setCoverFromClipboard = { if let note = selectedNote { CoverControls.pasteInto(note) } }
+        actions.removeCover = { if let note = selectedNote { CoverControls.remove(from: note) } }
         actions.manageTags = { showTagManager = true }
         actions.toggleFocusMode = {
             withAnimation(.easeInOut(duration: 0.2)) {

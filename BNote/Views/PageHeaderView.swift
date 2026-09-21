@@ -90,7 +90,7 @@ struct PageHeaderView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .padding(10)
-            .opacity(coverHovering || repositioning ? 1 : 0)
+            .opacity(coverHovering || repositioning ? 1 : 0.7)
             .animation(.easeOut(duration: 0.15), value: coverHovering)
 
             if repositioning {
@@ -209,7 +209,7 @@ struct PageHeaderView: View {
             .foregroundStyle(.secondary)
             .frame(height: 22)
             .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
-            .opacity(headerHovering ? 1 : 0)
+            .opacity(headerHovering ? 1 : 0.55)
             .animation(.easeOut(duration: 0.12), value: headerHovering)
             .padding(.top, note.hasCover ? 0 : 8)
             .offset(y: note.hasCover ? -note.coverHeight + 4 : 0)   // float over the cover's bottom
