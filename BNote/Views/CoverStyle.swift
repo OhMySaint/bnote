@@ -32,6 +32,16 @@ enum CoverStyle: String, CaseIterable, Identifiable {
     var gradient: LinearGradient {
         LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
+
+    /// Rasterised gradient, for exports that need a picture.
+    func image(size: NSSize) -> NSImage {
+        let image = NSImage(size: size)
+        image.lockFocus()
+        let nsColors = colors.map { NSColor($0) }
+        NSGradient(colors: nsColors)?.draw(in: NSRect(origin: .zero, size: size), angle: -30)
+        image.unlockFocus()
+        return image
+    }
 }
 
 /// Cover artwork for a page: a photo, a gradient, or nothing.

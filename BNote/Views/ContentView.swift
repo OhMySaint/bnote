@@ -222,6 +222,16 @@ struct ContentView: View {
         }
     }
 
+    private func exportHeader(for note: Note) -> ExportHeader {
+        var cover: NSImage?
+        if let data = note.coverData {
+            cover = NSImage(data: data)
+        } else if let style = CoverStyle(rawValue: note.coverStyle) {
+            cover = style.image(size: NSSize(width: 1200, height: 400))
+        }
+        return ExportHeader(title: note.title, subtitle: note.subtitle, cover: cover, coverFocus: note.coverOffset, icon: note.showIcon ? note.icon : "")
+    }
+
     private func export(_ format: DocumentFormat) {
         guard let note = selectedNote else { return }
         controller.saveNow()
@@ -230,7 +240,8 @@ struct ContentView: View {
                 attributed: controller.attributedCopy,
                 format: format,
                 suggestedName: note.displayTitle,
-                config: controller.config
+                config: controller.config,
+                header: exportHeader(for: note)
             )
         } catch {
             errorMessage = error.localizedDescription
@@ -270,7 +281,10 @@ struct ContentView: View {
         }
         actions.printDocument = {
             controller.saveNow()
-            controller.documentView?.printDocument(jobTitle: selectedNote?.displayTitle ?? "BNote")
+            controller.documentView?.printDocument(
+                jobTitle: selectedNote?.displayTitle ?? "BNote",
+                header: selectedNote.map(exportHeader(for:))
+            )
         }
     }
 }

@@ -16,6 +16,8 @@ struct FormatState: Equatable {
     /// nil means the automatic text colour / no highlight.
     var textColor: NSColor?
     var highlight: NSColor?
+    /// PostScript name of the exact face in use (e.g. HelveticaNeue-Light).
+    var fontName = ""
 }
 
 /// Owns the shared text storage for the whole app and applies every formatting
@@ -255,6 +257,7 @@ final class DocumentController: NSObject, ObservableObject {
         let font = attributes[.font] as? NSFont ?? EditorDefaults.bodyFont
         let traits = NSFontManager.shared.traits(of: font)
         state.fontFamily = font.familyName ?? EditorDefaults.fontFamily
+        state.fontName = font.fontName
         state.fontSize = font.pointSize
         state.bold = traits.contains(.boldFontMask)
         state.italic = traits.contains(.italicFontMask)
@@ -425,6 +428,37 @@ final class DocumentController: NSObject, ObservableObject {
         }
     }
 
+    /// Faces of a family as the font panel lists them: (PostScript name, style name, weight).
+    static func faces(of family: String) -> [(name: String, style: String, weight: Int)] {
+        let members = NSFontManager.shared.availableMembers(ofFontFamily: family) ?? []
+        return members.compactMap { member in
+            guard member.count >= 3, let name = member[0] as? String, let style = member[1] as? String,
+                  let weight = member[2] as? Int else { return nil }
+            return (name, style, weight)
+        }
+    }
+
+    /// Switches to an exact face (Light, Medium, Condensed Bold…) keeping the size.
+    func setFontFace(_ postScriptName: String) {
+        let range = selectedRange
+        if range.length == 0 {
+            let current = (activeTextView?.typingAttributes[.font] as? NSFont) ?? EditorDefaults.bodyFont
+            if let face = NSFont(name: postScriptName, size: current.pointSize) {
+                activeTextView?.typingAttributes[.font] = face
+            }
+            refreshFormatState()
+            return
+        }
+        mutate(range: range) {
+            textStorage.enumerateAttribute(.font, in: range) { value, subrange, _ in
+                let font = value as? NSFont ?? EditorDefaults.bodyFont
+                if let face = NSFont(name: postScriptName, size: font.pointSize) {
+                    textStorage.addAttribute(.font, value: face, range: subrange)
+                }
+            }
+        }
+    }
+
     func setFontSize(_ size: CGFloat) {
         let clamped = min(max(size, 6), 288)
         let range = selectedRange
@@ -583,7 +617,9 @@ final class DocumentController: NSObject, ObservableObject {
     // MARK: - Lists
 
     private func listInfo(in paragraph: String) -> (kind: ListKind, markerLength: Int, number: Int)? {
-        if paragraph.hasPrefix("•\t") { return (.bullet, 2, 0) }
+        if let first = paragraph.first, ListKind.bulletGlyphs.contains(first), paragraph.dropFirst().hasPrefix("\t") {
+            return (.bullet, 2, 0)
+        }
         if paragraph.hasPrefix("\(Checkbox.unchecked)\t") || paragraph.hasPrefix("\(Checkbox.checked)\t") {
             return (.todo, 2, 0)
         }
@@ -595,6 +631,84 @@ final class DocumentController: NSObject, ObservableObject {
         let rest = paragraph.dropFirst(digits.count)
         guard rest.hasPrefix(".\t") else { return nil }
         return (.numbered, digits.count + 2, Int(digits) ?? 1)
+    }
+
+    /// Nesting depth from the paragraph's first-line indent, in tab steps.
+    private func listLevel(of style: NSParagraphStyle?) -> Int {
+        Int(((style?.firstLineHeadIndent ?? 0) / EditorDefaults.tabIndent).rounded())
+    }
+
+    /// Tab / Shift-Tab: nest or un-nest the current paragraphs; bullets change
+    /// glyph with depth, numbering restarts per level.
+    func shiftIndent(by steps: Int) {
+        guard let textView = activeTextView else { return }
+        let selection = textView.selectedRange()
+        let ranges = paragraphRanges(for: selection)
+        let string = textStorage.string as NSString
+        let delta = CGFloat(steps) * EditorDefaults.tabIndent
+
+        var edits: [(NSRange, Character)] = []
+        for paragraph in ranges where paragraph.location < textStorage.length {
+            let style = textStorage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+            let current = listLevel(of: style)
+            let next = max(0, current + steps)
+            guard next != current else { continue }
+            let text = string.substring(with: paragraph)
+            if let info = listInfo(in: text), info.kind == .bullet {
+                edits.append((NSRange(location: paragraph.location, length: 1), ListKind.bulletGlyph(level: next)))
+            }
+        }
+        // Indent changes first (they do not move characters), then glyph swaps.
+        updateParagraphs { style in
+            let base = max(0, style.firstLineHeadIndent + delta)
+            let hanging = style.headIndent - style.firstLineHeadIndent
+            style.firstLineHeadIndent = base
+            style.headIndent = base + max(0, hanging)
+            if !style.tabStops.isEmpty {
+                style.tabStops = [NSTextTab(textAlignment: .left, location: base + EditorDefaults.listIndent, options: [:])]
+            }
+        }
+        if !edits.isEmpty {
+            let whole = NSRange(location: edits.first!.0.location, length: edits.last!.0.upperBound - edits.first!.0.location)
+            guard textView.shouldChangeText(in: whole, replacementString: nil) else { return }
+            textStorage.beginEditing()
+            for (range, glyph) in edits {
+                let attributes = textStorage.attributes(at: range.location, effectiveRange: nil)
+                textStorage.replaceCharacters(in: range, with: NSAttributedString(string: String(glyph), attributes: attributes))
+            }
+            textStorage.endEditing()
+            textView.didChangeText()
+        }
+        renumberLists()
+        refreshFormatState()
+    }
+
+    /// Backspace right after a list marker turns the item back into plain text.
+    func removeListMarkerIfCaretFollowsIt(in textView: NSTextView) -> Bool {
+        let selection = textView.selectedRange()
+        guard selection.length == 0, textStorage.length > 0 else { return false }
+        let paragraph = paragraphRange(at: selection.location)
+        guard paragraph.location < textStorage.length else { return false }
+        let text = (textStorage.string as NSString).substring(with: paragraph)
+        guard let info = listInfo(in: text), selection.location == paragraph.location + info.markerLength else { return false }
+
+        let markerRange = NSRange(location: paragraph.location, length: info.markerLength)
+        guard textView.shouldChangeText(in: markerRange, replacementString: "") else { return false }
+        textStorage.beginEditing()
+        textStorage.replaceCharacters(in: markerRange, with: "")
+        let remaining = NSRange(location: paragraph.location, length: max(0, paragraph.length - info.markerLength))
+        let style = paragraphStyle(at: min(paragraph.location, max(0, textStorage.length - 1)))
+        style.headIndent = style.firstLineHeadIndent
+        style.tabStops = []
+        if remaining.length > 0, remaining.upperBound <= textStorage.length {
+            textStorage.addAttribute(.paragraphStyle, value: style, range: remaining)
+        }
+        textStorage.endEditing()
+        textView.didChangeText()
+        textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
+        textView.typingAttributes[.paragraphStyle] = style
+        documentDidChange()
+        return true
     }
 
     private func currentListKind() -> ListKind {
@@ -628,7 +742,10 @@ final class DocumentController: NSObject, ObservableObject {
                 }
                 if !alreadyList {
                     // renumberLists() fixes the ordinals afterwards.
-                    let marker = kind.marker
+                    let level = listLevel(of: textStorage.length > range.location
+                        ? textStorage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
+                        : nil)
+                    let marker = kind.marker(level: level)
                     let attributes = textStorage.length > range.location
                         ? textStorage.attributes(at: range.location, effectiveRange: nil)
                         : EditorDefaults.bodyAttributes
@@ -654,27 +771,32 @@ final class DocumentController: NSObject, ObservableObject {
         refreshFormatState()
     }
 
-    /// Keeps `1. 2. 3.` sequences correct after edits.
+    /// Keeps `1. 2. 3.` sequences correct after edits; a deeper level restarts
+    /// at 1 and a shallower one carries on where it left off.
     private func renumberLists() {
         guard !isRenumbering else { return }
         let string = textStorage.string as NSString
         guard string.length > 0 else { return }
 
         var replacements: [(NSRange, String)] = []
-        var counter = 0
+        var counters: [Int] = []          // one running count per nesting level
         var location = 0
         while location < string.length {
             let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
             let text = string.substring(with: paragraph)
             let info = listInfo(in: text)
             if let info, info.kind == .numbered {
-                counter += 1
-                if info.number != counter {
-                    let markerRange = NSRange(location: paragraph.location, length: info.markerLength)
-                    replacements.append((markerRange, "\(counter).\t"))
+                let style = textStorage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+                let level = listLevel(of: style)
+                if counters.count > level + 1 { counters.removeLast(counters.count - level - 1) }
+                while counters.count < level + 1 { counters.append(0) }
+                counters[level] += 1
+                let expected = counters[level]
+                if info.number != expected {
+                    replacements.append((NSRange(location: paragraph.location, length: info.markerLength), "\(expected).\t"))
                 }
             } else if info == nil, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                counter = 0
+                counters.removeAll()
             }
             location = paragraph.upperBound
         }
@@ -1656,7 +1778,21 @@ extension DocumentController: NSTextViewDelegate {
     /// While the "/" menu is open it owns the arrow keys, Enter and Escape.
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         DebugLog.write("doCommandBy \(selector) menuOpen=\(isSlashMenuOpen)")
-        guard isSlashMenuOpen else { return false }
+        if !isSlashMenuOpen {
+            switch selector {
+            case #selector(NSResponder.insertTab(_:)):
+                if isCodeParagraph(at: textView.selectedRange().location) { return false }
+                shiftIndent(by: 1)
+                return true
+            case #selector(NSResponder.insertBacktab(_:)):
+                shiftIndent(by: -1)
+                return true
+            case #selector(NSResponder.deleteBackward(_:)):
+                return removeListMarkerIfCaretFollowsIt(in: textView)
+            default:
+                return false
+            }
+        }
         switch selector {
         case #selector(NSResponder.moveDown(_:)):
             moveSlashSelection(1)
@@ -1781,7 +1917,7 @@ extension DocumentController: NSTextViewDelegate {
 
         let marker: String
         switch info.kind {
-        case .bullet: marker = "•\t"
+        case .bullet: marker = "\(text.first ?? "•")\t"
         case .todo: marker = "\(Checkbox.unchecked)\t"
         default: marker = "\(info.number + 1).\t"
         }

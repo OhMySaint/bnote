@@ -94,10 +94,19 @@ enum TextStyle: String, CaseIterable, Identifiable {
 enum ListKind {
     case none, bullet, numbered, todo
 
-    var marker: String {
+    /// Bullet glyph per nesting level, cycling like Notion / Word.
+    static let bulletGlyphs: [Character] = ["•", "◦", "▪"]
+
+    static func bulletGlyph(level: Int) -> Character {
+        bulletGlyphs[max(0, level) % bulletGlyphs.count]
+    }
+
+    var marker: String { marker(level: 0) }
+
+    func marker(level: Int) -> String {
         switch self {
         case .none: ""
-        case .bullet: "•\t"
+        case .bullet: "\(ListKind.bulletGlyph(level: level))\t"
         case .numbered: "1.\t"
         case .todo: "☐\t"
         }

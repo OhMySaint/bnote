@@ -52,6 +52,71 @@ enum DocumentIOError: LocalizedError {
     }
 }
 
+/// What goes above the body when a page is exported or printed.
+struct ExportHeader {
+    var title: String
+    var subtitle: String
+    var cover: NSImage?
+    var coverFocus: CGFloat = 0.5
+    var icon: String = ""
+
+    /// Cover cropped to a banner the width of the text box, using the same
+    /// vertical focus as on screen.
+    func banner(width: CGFloat) -> NSImage? {
+        guard let cover else { return nil }
+        let height = (width * 0.34).rounded()
+        let scale = max(width / max(cover.size.width, 1), height / max(cover.size.height, 1))
+        let fitted = NSSize(width: cover.size.width * scale, height: cover.size.height * scale)
+        let overflow = max(0, fitted.height - height)
+        let image = NSImage(size: NSSize(width: width, height: height))
+        image.lockFocus()
+        NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: width, height: height), xRadius: 6, yRadius: 6).addClip()
+        // AppKit draws bottom-up; a focus of 0 must show the top of the picture.
+        let originY = -(overflow * (1 - coverFocus))
+        cover.draw(in: NSRect(x: (width - fitted.width) / 2, y: originY, width: fitted.width, height: fitted.height),
+                   from: .zero, operation: .copy, fraction: 1)
+        image.unlockFocus()
+        return image
+    }
+
+    /// Banner + title + subtitle in front of the body.
+    func prepend(to body: NSAttributedString, contentWidth: CGFloat) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let plain = NSMutableParagraphStyle()
+        plain.paragraphSpacing = 10
+
+        if let banner = banner(width: contentWidth) {
+            let attachment = NSTextAttachment()
+            attachment.image = banner
+            attachment.bounds = NSRect(origin: .zero, size: banner.size)
+            result.append(NSAttributedString(attachment: attachment))
+            result.append(NSAttributedString(string: "\n", attributes: [.paragraphStyle: plain, .font: EditorDefaults.bodyFont]))
+        }
+
+        let titleText = (icon.isEmpty ? "" : icon + " ") + (title.isEmpty ? "Trang không tên" : title)
+        let titleStyle = NSMutableParagraphStyle()
+        titleStyle.paragraphSpacing = subtitle.isEmpty ? 14 : 4
+        titleStyle.paragraphSpacingBefore = 6
+        titleStyle.headerLevel = 1
+        result.append(NSAttributedString(string: titleText + "\n", attributes: [
+            .font: NSFont.systemFont(ofSize: 28, weight: .bold),
+            .foregroundColor: NSColor.textColor,
+            .paragraphStyle: titleStyle,
+        ]))
+        if !subtitle.isEmpty {
+            let subStyle = NSMutableParagraphStyle()
+            subStyle.paragraphSpacing = 14
+            result.append(NSAttributedString(string: subtitle + "\n", attributes: [
+                .font: NSFont.systemFont(ofSize: 13),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: subStyle,
+            ]))
+        }
+        result.append(body)
+        return result
+    }
+}
+
 enum DocumentIO {
     static let importableExtensions = ["rtf", "rtfd", "doc", "docx", "odt", "html", "htm", "md", "markdown", "txt", "text"]
 
@@ -132,7 +197,8 @@ enum DocumentIO {
         attributed: NSAttributedString,
         format: DocumentFormat,
         suggestedName: String,
-        config: PageConfig
+        config: PageConfig,
+        header: ExportHeader? = nil
     ) throws {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [format.contentType]
@@ -140,10 +206,11 @@ enum DocumentIO {
         panel.message = "Xuất tài liệu"
         panel.prompt = "Xuất"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        try write(attributed: attributed, format: format, to: url, config: config)
+        try write(attributed: attributed, format: format, to: url, config: config, header: header)
     }
 
-    static func write(attributed original: NSAttributedString, format: DocumentFormat, to url: URL, config: PageConfig) throws {
+    static func write(attributed body: NSAttributedString, format: DocumentFormat, to url: URL, config: PageConfig, header: ExportHeader? = nil) throws {
+        let original = header?.prepend(to: body, contentWidth: config.contentSize.width) ?? body
         // Frames only render in our own layout; PDF keeps them, the rest get a flat stand-in.
         let attributed = format == .pdf ? original : DocumentStorage.flattenedForExport(original)
         let range = NSRange(location: 0, length: attributed.length)

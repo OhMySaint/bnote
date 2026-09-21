@@ -32,12 +32,10 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             List(selection: $selection) {
                 Section {
-                    Button {
-                        onShowDashboard()
-                    } label: {
-                        Label("Tổng quan", systemImage: "square.grid.2x2")
-                    }
-                    .buttonStyle(.plain)
+                    Label("Tổng quan", systemImage: "square.grid.2x2")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                        .onTapGesture { onShowDashboard() }
                 }
 
                 Section("Trang") {
@@ -268,9 +266,9 @@ private struct PageRow: View {
                 }
             }
             .padding(.vertical, 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
             .onHover { hovering = $0 }
-            .simultaneousGesture(TapGesture(count: 2).onEnded { renamingID = note.persistentModelID })
         }
     }
 

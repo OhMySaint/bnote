@@ -20,6 +20,7 @@ struct FormatToolbar: View {
                 ToolGroup { styleMenu }
                 ToolGroup {
                     fontMenu
+                    faceMenu
                     sizeControls
                 }
                 ToolGroup { traitButtons }
@@ -85,6 +86,31 @@ struct FormatToolbar: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("Phông chữ")
+    }
+
+    /// Every face the current family offers, so "heavy", "light" or "condensed"
+    /// cuts are one click away instead of hiding behind the font panel.
+    private var faceMenu: some View {
+        let faces = DocumentController.faces(of: controller.format.fontFamily)
+        let currentStyle = faces.first { $0.name == controller.format.fontName }?.style ?? "Regular"
+        return Menu {
+            ForEach(faces, id: \.name) { face in
+                Button {
+                    controller.setFontFace(face.name)
+                } label: {
+                    Text(face.style)
+                    if face.name == controller.format.fontName { Image(systemName: "checkmark") }
+                }
+            }
+        } label: {
+            Text(currentStyle)
+                .lineLimit(1)
+                .frame(width: 74, alignment: .leading)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(faces.count <= 1)
+        .help("Kiểu chữ / độ đậm của phông đang chọn")
     }
 
     private var sizeControls: some View {

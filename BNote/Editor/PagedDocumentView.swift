@@ -713,13 +713,22 @@ final class PagedDocumentView: NSView {
         else { return }
 
         let rect = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyphIndex, length: 1), in: container)
-        let target = page.textView.convert(rect, to: self).insetBy(dx: 0, dy: -90)
-        scrollToVisible(target)
+        let target = page.textView.convert(rect, to: self)
+        // Put the heading at the top of the view, not merely somewhere visible.
+        if let scrollView = enclosingScrollView {
+            let clip = scrollView.contentView
+            let maxY = max(0, bounds.height - clip.bounds.height)
+            let y = min(max(0, target.minY - 14), maxY)
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+            scrollView.reflectScrolledClipView(clip)
+        } else {
+            scrollToVisible(target)
+        }
         window?.makeFirstResponder(page.textView)
         page.textView.setSelectedRange(NSRange(location: index, length: 0))
     }
 
-    func printDocument(jobTitle: String) {
+    func printDocument(jobTitle: String, header: ExportHeader? = nil) {
         let info = NSPrintInfo.shared.copy() as? NSPrintInfo ?? NSPrintInfo.shared
         info.paperSize = config.size
         info.topMargin = config.margins.top
@@ -731,8 +740,9 @@ final class PagedDocumentView: NSView {
         info.isVerticallyCentered = false
         info.isHorizontallyCentered = false
 
+        let body = controller?.attributedCopy ?? NSAttributedString()
         let printView = DocumentIO.makePrintView(
-            attributed: controller?.attributedCopy ?? NSAttributedString(),
+            attributed: header?.prepend(to: body, contentWidth: config.contentSize.width) ?? body,
             contentWidth: config.contentSize.width
         )
         let operation = NSPrintOperation(view: printView, printInfo: info)
