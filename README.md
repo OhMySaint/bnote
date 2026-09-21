@@ -76,6 +76,15 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 | ⇧⌘- / ⌃⌘G | Chữ nhỏ / lưới ô vuông |
 | ⇧⌘\\ | Toàn chiều rộng / cột đọc |
 
+## Kiểm thử
+
+```bash
+scripts/test.sh
+```
+
+Harness headless trong `Tests/Harness` (compile bằng `swiftc`, bơm NSEvent thật vào cửa sổ offscreen).
+Chi tiết kiến trúc và các bẫy đã gặp: `HANDOFF.md`.
+
 ## Đóng gói bản dùng thử
 
 ```bash
