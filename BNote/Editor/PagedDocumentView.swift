@@ -454,9 +454,13 @@ struct CanvasOptions: Equatable {
     var fullWidth = false
     /// Notion's "Small text": the document renders a notch smaller, more per line.
     var smallText = false
+    /// Docs-style zoom: pure magnification of the whole page, never reflows text.
+    var zoom: CGFloat = 1
 
     static let smallTextScale: CGFloat = 0.875
+    static let zoomSteps: [CGFloat] = [0.5, 0.75, 0.9, 1, 1.25, 1.5, 2]
     var textScale: CGFloat { continuous && smallText ? Self.smallTextScale : 1 }
+    var magnification: CGFloat { textScale * zoom }
 }
 
 /// Stacks pages vertically and grows or shrinks the page count as the shared
@@ -465,11 +469,12 @@ final class PagedDocumentView: NSView {
     enum Metrics {
         static let gap: CGFloat = 26
         static let sideInset: CGFloat = 36
-        /// Notion's reading column and the breathing room either side of it.
-        static let readingWidth: CGFloat = 900
-        static let minimumColumn: CGFloat = 360
-        static let gutter: CGFloat = 40
-        static let fullWidthGutter: CGFloat = 24
+        /// Side gutters as a share of the window: full width keeps 3 %, the
+        /// reading layout 2.5× that.
+        static let fullWidthGutterRatio: CGFloat = 0.03
+        static let readingGutterRatio: CGFloat = 0.075
+        static let minimumGutter: CGFloat = 16
+        static let minimumColumn: CGFloat = 320
         static let columnTop: CGFloat = 8
         static let tailRoom: CGFloat = 240
     }
@@ -669,21 +674,26 @@ final class PagedDocumentView: NSView {
     private func layoutContinuousColumn() {
         guard let page = pages.first, let layoutManager else { return }
         let scrollView = enclosingScrollView
-        // Clip bounds are document points; with "small text" the document is
-        // drawn at a reduced scale, so visual sizes are divided by that scale.
-        let scale = options.textScale
-        let visibleWidth = scrollView?.contentView.bounds.width ?? bounds.width
-        let visibleHeight = scrollView?.contentView.bounds.height ?? bounds.height
-        let headerHeight = self.headerHeight / scale
+        let magnification = max(options.magnification, 0.01)
+        let textScale = options.textScale
+        // Window size in screen points, independent of zoom, so zooming never reflows.
+        let windowWidth = scrollView?.contentView.frame.width ?? bounds.width
+        let windowHeight = scrollView?.contentView.frame.height ?? bounds.height
 
-        let gutter = (options.fullWidth ? Metrics.fullWidthGutter : Metrics.gutter) / scale
-        let available = max(Metrics.minimumColumn / scale, visibleWidth - gutter * 2)
-        let columnWidth = (options.fullWidth ? available : min(available, Metrics.readingWidth / scale)).rounded()
-        let columnX = ((visibleWidth - columnWidth) / 2).rounded()
+        let ratio = options.fullWidth ? Metrics.fullWidthGutterRatio : Metrics.readingGutterRatio
+        let gutter = max(Metrics.minimumGutter, (windowWidth * ratio).rounded())
+        let columnVisual = max(Metrics.minimumColumn, windowWidth - gutter * 2)
+        // "Small text" fits more per line: the column holds more document points.
+        let columnWidth = (columnVisual / textScale).rounded()
+
+        // Document width in document points: at least the window, wider when zoomed in.
+        let docWidth = max(windowWidth / magnification, columnWidth + (gutter * 2) / magnification).rounded()
+        let columnX = ((docWidth - columnWidth) / 2).rounded()
         contentLeading = columnX
         contentWidth = columnWidth
         pageOriginX = columnX - config.margins.left
 
+        let headerInDocument = headerHeight / magnification
         let container = page.textView.textContainer
         let tall = NSSize(width: columnWidth, height: 10_000_000)
         if container?.size != tall {
@@ -691,16 +701,16 @@ final class PagedDocumentView: NSView {
         }
         layoutManager.ensureLayout(for: container!)
         let used = layoutManager.usedRect(for: container!).height
-        let textHeight = max(used, visibleHeight - headerHeight - Metrics.columnTop) + Metrics.tailRoom
+        let textHeight = max(used, windowHeight / magnification - headerInDocument - Metrics.columnTop) + Metrics.tailRoom
 
         page.textView.minSize = NSSize(width: columnWidth, height: textHeight)
         page.textView.maxSize = NSSize(width: columnWidth, height: textHeight)
-        let top = headerHeight + Metrics.columnTop
+        let top = headerInDocument + Metrics.columnTop
         page.pageNumber = 1
-        page.frame = NSRect(x: 0, y: top, width: visibleWidth, height: textHeight)
+        page.frame = NSRect(x: 0, y: top, width: docWidth, height: textHeight)
         page.apply(config: config, options: options, contentRect: NSRect(x: columnX, y: 0, width: columnWidth, height: textHeight))
 
-        let newSize = NSSize(width: visibleWidth, height: top + textHeight)
+        let newSize = NSSize(width: docWidth, height: top + textHeight)
         if frame.size != newSize { setFrameSize(newSize) }
     }
 
@@ -712,7 +722,7 @@ final class PagedDocumentView: NSView {
         contentLeading = pageOriginX + config.margins.left
         contentWidth = config.contentSize.width
 
-        var y = headerHeight + Metrics.gap
+        var y = headerHeight / max(options.magnification, 0.01) + Metrics.gap
         for (index, page) in pages.enumerated() {
             page.pageNumber = index + 1
             page.frame = NSRect(x: pageOriginX, y: y, width: config.size.width, height: config.size.height)
@@ -818,9 +828,8 @@ final class EditorCanvasView: NSView {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = NSColor.underPageBackgroundColor
         scrollView.borderType = .noBorder
-        scrollView.allowsMagnification = true
-        scrollView.minMagnification = CanvasOptions.smallTextScale
-        scrollView.maxMagnification = 1
+        // Pinch is handled here (see magnify(with:)) so zoom stays a clean, stepped value.
+        scrollView.allowsMagnification = false
         scrollView.documentView = canvas
         scrollView.contentView.postsBoundsChangedNotifications = true
 
@@ -849,22 +858,37 @@ final class EditorCanvasView: NSView {
         publishHeaderLayout()
     }
 
-    /// Where the header overlay should sit, in this view's (unscaled) points.
+    /// Where the header overlay should sit. The overlay is laid out at zoom 1 and
+    /// then scaled by `zoom`, so leading / width are given before scaling.
     private func publishHeaderLayout() {
         guard let layout = controller?.headerLayout else { return }
-        let scale = scrollView.magnification
+        let magnification = scrollView.magnification
+        let zoom = max(options.zoom, 0.01)
         let clip = scrollView.contentView.bounds.origin
-        let leading = (canvas.contentLeading - clip.x) * scale
-        let width = canvas.contentWidth * scale
-        let scrollOffset = clip.y * scale
+        let leading = (canvas.contentLeading - clip.x) * magnification / zoom
+        let width = canvas.contentWidth * magnification / zoom
+        let scrollOffset = clip.y * magnification
         guard abs(layout.leading - leading) > 0.5 || abs(layout.width - width) > 0.5
-            || abs(layout.scrollOffset - scrollOffset) > 0.5 || layout.top != 0 else { return }
+            || abs(layout.scrollOffset - scrollOffset) > 0.5 || abs(layout.zoom - zoom) > 0.001 else { return }
         DispatchQueue.main.async {
             layout.leading = leading
             layout.width = width
             layout.scrollOffset = scrollOffset
-            layout.top = 0
+            layout.zoom = zoom
         }
+    }
+
+    /// Trackpad pinch: continuous zoom while pinching, like Docs.
+    override func magnify(with event: NSEvent) {
+        guard let controller else { return }
+        let next = min(max(controller.canvasOptions.zoom * (1 + event.magnification), 0.5), 2.0)
+        controller.canvasOptions.zoom = (next * 100).rounded() / 100
+    }
+
+    /// Two-finger double tap: back to 100 %, or up to 150 % from there.
+    override func smartMagnify(with event: NSEvent) {
+        guard let controller else { return }
+        controller.canvasOptions.zoom = abs(controller.canvasOptions.zoom - 1) < 0.01 ? 1.5 : 1
     }
 
     func apply(options newOptions: CanvasOptions) {
@@ -881,9 +905,10 @@ final class EditorCanvasView: NSView {
         canvas.relayout()
     }
 
-    /// The only scale is Notion's "small text"; otherwise text is 1:1.
+    /// Small text × zoom. Zoom is pure magnification: the column keeps its
+    /// document width, so lines never re-break while zooming.
     private func updateMagnification() {
-        let target = options.textScale
+        let target = options.magnification
         if abs(scrollView.magnification - target) > 0.001 {
             scrollView.setMagnification(target, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
             canvas.relayout()

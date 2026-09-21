@@ -115,7 +115,7 @@ struct FormatToolbar: View {
 
     private var sizeControls: some View {
         HStack(spacing: 0) {
-            ToolButton(icon: "minus", isOn: false, help: "Giảm cỡ chữ (⌘−)") {
+            ToolButton(icon: "minus", isOn: false, help: "Giảm cỡ chữ (⇧⌘,)") {
                 controller.nudgeFontSize(by: -1)
             }
             TextField("", text: $sizeText)
@@ -138,7 +138,7 @@ struct FormatToolbar: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            ToolButton(icon: "plus", isOn: false, help: "Tăng cỡ chữ (⌘+)") {
+            ToolButton(icon: "plus", isOn: false, help: "Tăng cỡ chữ (⇧⌘.)") {
                 controller.nudgeFontSize(by: 1)
             }
         }

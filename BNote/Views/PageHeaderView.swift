@@ -8,6 +8,7 @@ final class HeaderLayout: ObservableObject {
     @Published var width: CGFloat = 595
     @Published var scrollOffset: CGFloat = 0
     @Published var top: CGFloat = 0
+    @Published var zoom: CGFloat = 1
 }
 
 /// Notion-style page top, hosted inside the scrolling canvas above the first

@@ -1009,6 +1009,21 @@ final class DocumentController: NSObject, ObservableObject {
     func toggleFullWidth() {
         canvasOptions.fullWidth.toggle()
     }
+
+    func setZoom(_ zoom: CGFloat) {
+        canvasOptions.zoom = min(max(zoom, 0.5), 2.0)
+    }
+
+    /// Steps through the Docs ladder 50 · 75 · 90 · 100 · 125 · 150 · 200.
+    func zoom(step direction: Int) {
+        let steps = CanvasOptions.zoomSteps
+        let current = canvasOptions.zoom
+        if direction > 0 {
+            setZoom(steps.first { $0 > current + 0.001 } ?? steps.last!)
+        } else {
+            setZoom(steps.last { $0 < current - 0.001 } ?? steps.first!)
+        }
+    }
 }
 
 // MARK: - Slash menu
@@ -1849,27 +1864,36 @@ extension DocumentController: NSTextViewDelegate {
             }
         }
 
-        // Enter at the end of a heading starts a plain paragraph, as in Notion.
+        // Enter at the end of a plain paragraph starts a fresh one: heading,
+        // bold, colours and highlights do not carry over (as in Notion). Lists,
+        // code blocks, quotes and callouts keep their own continuation rules.
         if listInfo(in: text) == nil, paragraph.location < textStorage.length {
             let font = textStorage.attribute(.font, at: paragraph.location, effectiveRange: nil) as? NSFont
             let style = textStorage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
-            let detected = TextStyle.detect(font: font, paragraph: style)
-            let isHeading = detected.headerLevel > 0 || detected == .title
+            let framed = !(style?.textBlocks.isEmpty ?? true)
             let tail = string.substring(with: NSRange(location: affectedCharRange.location, length: paragraph.upperBound - affectedCharRange.location))
             let atEnd = tail.trimmingCharacters(in: .newlines).isEmpty
-            if isHeading, atEnd {
-                let headingAttributes = textStorage.attributes(at: paragraph.location, effectiveRange: nil)
+            if !framed, atEnd {
+                let endAttributes = textStorage.attributes(at: max(paragraph.location, affectedCharRange.location - 1), effectiveRange: nil)
                 isInsertingBreak = true
                 defer { isInsertingBreak = false }
                 guard textView.shouldChangeText(in: affectedCharRange, replacementString: "\n") else { return false }
                 textStorage.beginEditing()
-                textStorage.replaceCharacters(in: affectedCharRange, with: NSAttributedString(string: "\n", attributes: headingAttributes))
+                textStorage.replaceCharacters(in: affectedCharRange, with: NSAttributedString(string: "\n", attributes: endAttributes))
                 textStorage.endEditing()
                 textView.didChangeText()
                 textView.setSelectedRange(NSRange(location: affectedCharRange.location + 1, length: 0))
+
                 var body = EditorDefaults.bodyAttributes
                 if let family = font?.familyName {
                     body[.font] = NSFont(name: family, size: EditorDefaults.fontSize) ?? EditorDefaults.bodyFont
+                }
+                // Keep indentation and alignment; drop heading spacing.
+                if let style, let kept = style.mutableCopy() as? NSMutableParagraphStyle {
+                    kept.headerLevel = 0
+                    kept.paragraphSpacing = TextStyle.body.spacingAfter
+                    kept.paragraphSpacingBefore = 0
+                    body[.paragraphStyle] = kept
                 }
                 textView.typingAttributes = body
                 documentDidChange()

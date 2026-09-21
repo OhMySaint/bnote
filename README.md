@@ -26,7 +26,8 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 - Khổ A4 / Letter / Legal / A5 / A3 / Tabloid, giấy dọc hoặc ngang
 - Lề bốn cạnh chỉnh riêng bằng số cm, hoặc kéo tay trực tiếp trên thước kẻ
 - Lưới ô vuông nửa centimét, đường biên lề (kéo được) — bật tắt từng thứ ở chế độ Trang giấy rời
-- Không có zoom (như Notion): cột đọc 900pt canh giữa, tự co theo cửa sổ; **Toàn chiều rộng** giãn sát mép; **Chữ nhỏ** thu chữ 12,5% — cả hai lưu theo từng trang
+- Cột chữ theo cửa sổ: mặc định mép 7,5% mỗi bên, **Toàn chiều rộng** mép 3%; **Chữ nhỏ** thu 12,5% — hai tuỳ chọn lưu theo từng trang
+- Zoom kiểu Docs: pinch trackpad, ⌘+ ⌘− ⌘0, nấc 50–200%; phóng cả đầu trang, **không reflow** chữ, rộng quá thì cuộn ngang
 - Đếm số trang, số từ, số ký tự ở thanh trạng thái
 
 **Tổ chức nội dung**
@@ -62,6 +63,8 @@ cây trang kiểu Notion, nhập/xuất nhiều định dạng. SwiftUI + AppKit
 | --- | --- |
 | ⌘N / ⇧⌘N | Trang mới / trang con mới |
 | ⌘B ⌘I ⌘U | Đậm, nghiêng, gạch chân |
+| ⇧⌘. / ⇧⌘, | Tăng / giảm cỡ chữ |
+| ⌘+ ⌘− ⌘0 | Zoom (pinch trackpad cũng được) |
 | ⌥⌘1–3, ⌥⌘0 | Đầu mục 1–3, Văn bản |
 | ⇧⌘L E R J | Canh trái, giữa, phải, đều |
 | ⇧⌘8 ⇧⌘7 ⇧⌘9 | Danh sách chấm / số / việc cần làm |

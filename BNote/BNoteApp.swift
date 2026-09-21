@@ -107,9 +107,9 @@ struct BNoteCommands: Commands {
             Button("Giảm thụt lề") { controller.changeIndent(by: -EditorDefaults.tabIndent) }
                 .keyboardShortcut("[", modifiers: .command)
             Button("Tăng cỡ chữ") { controller.nudgeFontSize(by: 1) }
-                .keyboardShortcut("+", modifiers: .command)
+                .keyboardShortcut(".", modifiers: [.command, .shift])
             Button("Giảm cỡ chữ") { controller.nudgeFontSize(by: -1) }
-                .keyboardShortcut("-", modifiers: .command)
+                .keyboardShortcut(",", modifiers: [.command, .shift])
             Divider()
             Button("Xóa định dạng") { controller.clearFormatting() }
                 .keyboardShortcut("\\", modifiers: .command)
@@ -133,6 +133,13 @@ struct BNoteCommands: Commands {
             Toggle("Trang giấy rời", isOn: Binding(get: { !controller.canvasOptions.continuous }, set: { controller.canvasOptions.continuous = !$0 }))
             Toggle("Toàn chiều rộng", isOn: $controller.canvasOptions.fullWidth)
                 .keyboardShortcut("\\", modifiers: [.command, .shift])
+            Divider()
+            Button("Phóng to") { controller.zoom(step: 1) }
+                .keyboardShortcut("+", modifiers: .command)
+            Button("Thu nhỏ") { controller.zoom(step: -1) }
+                .keyboardShortcut("-", modifiers: .command)
+            Button("Cỡ thật (100%)") { controller.setZoom(1) }
+                .keyboardShortcut("0", modifiers: .command)
         }
     }
 

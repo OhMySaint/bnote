@@ -16,17 +16,24 @@ struct NoteEditorView: View {
     /// scrolled in step with it, so it stays crisp and fully interactive.
     private var editorWithHeader: some View {
         let layout = headerLayout
+        let zoom = max(layout.zoom, 0.01)
         let height = PageHeaderView.height(for: note, width: layout.width)
-        let visible = max(0, height - layout.scrollOffset)
-        return PagedEditor(controller: controller, headerHeight: height)
+        let visualHeight = height * zoom
+        let visible = max(0, visualHeight - layout.scrollOffset)
+        return PagedEditor(controller: controller, headerHeight: visualHeight)
             .overlay(alignment: .top) {
-                PageHeaderView(note: note, layout: layout)
-                    .frame(height: height)
-                    .frame(height: visible, alignment: .bottom)
-                    .clipped()
-                    .contentShape(.rect)
-                    .padding(.top, layout.top)
-                    .allowsHitTesting(visible > 1)
+                GeometryReader { geometry in
+                    // Laid out at 100 % and scaled with the page, so zooming is uniform.
+                    PageHeaderView(note: note, layout: layout)
+                        .frame(width: geometry.size.width / zoom, height: height, alignment: .topLeading)
+                        .scaleEffect(zoom, anchor: .topLeading)
+                        .frame(width: geometry.size.width, height: visualHeight, alignment: .topLeading)
+                        .offset(y: -layout.scrollOffset)
+                }
+                .frame(height: visible, alignment: .top)
+                .clipped()
+                .contentShape(.rect)
+                .allowsHitTesting(visible > 1)
             }
     }
 
@@ -79,6 +86,8 @@ struct NoteEditorView: View {
             Divider().frame(height: 12)
             widthControls
             statusToggle("Chữ nhỏ", icon: "textformat.size.smaller", keyPath: \.smallText)
+            Divider().frame(height: 12)
+            zoomMenu
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -107,6 +116,25 @@ struct NoteEditorView: View {
         }
         .buttonStyle(.borderless)
         .help("Ẩn/hiện \(label.lowercased())")
+    }
+
+    private var zoomMenu: some View {
+        Menu {
+            ForEach(CanvasOptions.zoomSteps, id: \.self) { step in
+                Button {
+                    controller.setZoom(step)
+                } label: {
+                    Text("\(Int(step * 100))%")
+                    if abs(controller.canvasOptions.zoom - step) < 0.01 { Image(systemName: "checkmark") }
+                }
+            }
+        } label: {
+            Text("\(Int((controller.canvasOptions.zoom * 100).rounded()))%")
+                .monospacedDigit()
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Thu phóng — pinch trên trackpad, ⌘+ ⌘− ⌘0")
     }
 
     private var widthControls: some View {
