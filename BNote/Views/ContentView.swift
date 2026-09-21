@@ -142,13 +142,14 @@ struct ContentView: View {
     // MARK: - Page actions
 
     @discardableResult
-    private func addPage(parent: Note?) -> Note {
+    private func addPage(parent: Note?, select: Bool = true) -> Note {
         let siblings = parent?.sortedChildren ?? notes.filter { $0.parent == nil }
         let note = Note(parent: parent, sortIndex: (siblings.map(\.sortIndex).max() ?? 0) + 1)
         note.pageConfig = Defaults.pageConfig
         context.insert(note)
         parent?.isExpanded = true
         try? context.save()
+        guard select else { return note }
         search = ""
         activeTag = nil
         selection = note.persistentModelID
@@ -249,6 +250,12 @@ struct ContentView: View {
     }
 
     private func wireCommands() {
+        // A migrated column gets one default for every existing row; links need unique ids.
+        var seen = Set<UUID>()
+        for note in notes where !seen.insert(note.uid).inserted {
+            note.uid = UUID()
+        }
+
         let actions = AppActions.shared
         actions.newPage = { addPage(parent: nil) }
         actions.newSubpage = { addPage(parent: selectedNote) }
@@ -261,6 +268,20 @@ struct ContentView: View {
             ui.showInspector = true
         }
         actions.showDashboard = { selection = nil }
+        actions.openPage = { uid in
+            if let target = notes.first(where: { $0.uid == uid }) {
+                var parent = target.parent
+                while let node = parent { node.isExpanded = true; parent = node.parent }
+                selection = target.persistentModelID
+            }
+        }
+        actions.createLinkedSubpage = { title in
+            guard let parent = selectedNote else { return nil }
+            let child = addPage(parent: parent, select: false)
+            child.title = title
+            try? context.save()
+            return (title, child.linkURL)
+        }
         actions.setCoverFromFile = { if let note = selectedNote { CoverControls.pick(into: note) } }
         actions.setCoverFromClipboard = { if let note = selectedNote { CoverControls.pasteInto(note) } }
         actions.removeCover = { if let note = selectedNote { CoverControls.remove(from: note) } }

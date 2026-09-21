@@ -1942,18 +1942,62 @@ extension DocumentController: NSTextViewDelegate {
         return false
     }
 
-    /// Web links open inside the app (YouTube plays in place); anything else
-    /// goes to the system.
+    /// Web links open inside the app (YouTube plays in place); page links jump
+    /// to that page; anything else goes to the system.
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         let url: URL?
         if let value = link as? URL { url = value } else if let string = link as? String { url = URL(string: string) } else { url = nil }
         guard let url else { return false }
-        if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+        switch url.scheme?.lowercased() {
+        case "http", "https":
             MediaViewerPanel.shared.open(url)
-        } else {
+        case "bnote":
+            if let uid = UUID(uuidString: url.lastPathComponent) { AppActions.shared.openPage?(uid) }
+        default:
             NSWorkspace.shared.open(url)
         }
         return true
+    }
+
+    /// Inserts "📄 Title" that opens another page, on its own line.
+    func insertPageLink(title: String, url: URL) {
+        guard let textView = activeTextView else { return }
+        var attributes = EditorDefaults.bodyAttributes
+        attributes[.link] = url.absoluteString as NSString
+        attributes[.underlineStyle] = 0
+        attributes[.foregroundColor] = NSColor.textColor
+        let line = NSMutableAttributedString(string: "📄 \(title)", attributes: attributes)
+        line.addAttribute(.font, value: NSFontManager.shared.convert(EditorDefaults.bodyFont, toHaveTrait: .boldFontMask), range: NSRange(location: 0, length: line.length))
+        let caret = textView.selectedRange()
+        let string = textStorage.string as NSString
+        let paragraph = paragraphRange(at: caret.location)
+        let lineIsEmpty = string.length == 0 || string.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let block = NSMutableAttributedString()
+        if !lineIsEmpty { block.append(NSAttributedString(string: "\n", attributes: EditorDefaults.bodyAttributes)) }
+        block.append(line)
+        block.append(NSAttributedString(string: "\n", attributes: EditorDefaults.bodyAttributes))
+        mutate(range: caret, replacement: block.string) {
+            textStorage.replaceCharacters(in: caret, with: block)
+        }
+        textView.setSelectedRange(NSRange(location: min(caret.location + block.length, textStorage.length), length: 0))
+        textView.typingAttributes = EditorDefaults.bodyAttributes
+    }
+
+    /// "/Trang con": make a child page and drop a link to it here.
+    func createLinkedSubpage() {
+        let alert = NSAlert()
+        alert.messageText = "Trang con mới"
+        alert.informativeText = "Tên trang con; một liên kết tới nó sẽ được chèn tại vị trí con trỏ."
+        alert.addButton(withTitle: "Tạo")
+        alert.addButton(withTitle: "Hủy")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        field.placeholderString = "Ví dụ: Chương 1"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let title = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let made = AppActions.shared.createLinkedSubpage?(title.isEmpty ? "Trang không tên" : title) else { return }
+        insertPageLink(title: made.title, url: made.url)
     }
 }
 

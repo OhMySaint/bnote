@@ -70,6 +70,10 @@ enum SlashCatalog {
             symbol: "tablecells", section: "Khối", keywords: ["bang", "table", "grid"]
         ) { $0.insertTable(rows: 3, columns: 3) },
         SlashCommand(
+            id: "subpage", title: "Trang con", subtitle: "Tạo trang con và chèn liên kết tới nó",
+            symbol: "doc.badge.plus", section: "Chèn", keywords: ["trang con", "page", "subpage", "chuong", "chương"]
+        ) { $0.createLinkedSubpage() },
+        SlashCommand(
             id: "image", title: "Ảnh", subtitle: "Chèn ảnh từ máy",
             symbol: "photo", section: "Chèn", keywords: ["anh", "image", "photo", "hinh"]
         ) { $0.insertImageFromPanel() },

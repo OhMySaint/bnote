@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class Note {
+    /// Stable identity for internal links (bnote://page/<uid>).
+    var uid: UUID = UUID()
     var title: String = ""
     var content: String = ""
     @Attribute(.externalStorage) var rtfData: Data?
@@ -71,6 +73,8 @@ final class Note {
     }
 
     var hasCover: Bool { coverData != nil || !coverStyle.isEmpty }
+
+    var linkURL: URL { URL(string: "bnote://page/\(uid.uuidString)")! }
 
     /// Every page below this one, depth first.
     var descendants: [Note] {

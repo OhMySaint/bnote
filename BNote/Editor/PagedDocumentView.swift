@@ -622,7 +622,13 @@ final class PagedDocumentView: NSView {
     func setHeaderHeight(_ height: CGFloat) {
         guard abs(height - headerHeight) > 0.5 else { return }
         headerHeight = height
-        needsLayout = true
+        layoutPages()
+    }
+
+    /// Re-places the sheets now; `needsLayout` alone is not honoured reliably
+    /// for this plain NSView inside a magnified scroll view.
+    func relayout() {
+        layoutPages()
     }
 
     // MARK: - Geometry
@@ -1054,6 +1060,8 @@ final class EditorCanvasView: NSView {
         ruler.frame = NSRect(x: 0, y: 0, width: bounds.width, height: rulerHeight)
         scrollView.frame = NSRect(x: 0, y: rulerHeight, width: bounds.width, height: bounds.height - rulerHeight)
         updateMagnification()
+        // Window resizes change the visible width the sheets are centred in.
+        canvas.relayout()
     }
 
     /// Fit mode: the sheet plus a small gutter always spans the visible width.
@@ -1070,7 +1078,7 @@ final class EditorCanvasView: NSView {
         }
         if abs(scrollView.magnification - target) > 0.001 {
             scrollView.setMagnification(target, centeredAt: NSPoint(x: 0, y: scrollView.contentView.bounds.minY))
-            canvas.needsLayout = true
+            canvas.relayout()
         }
         controller?.reportEffectiveZoom(target)
         ruler.needsDisplay = true
