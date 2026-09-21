@@ -54,6 +54,7 @@ final class DocumentController: NSObject, ObservableObject {
 
     let slashModel = SlashMenuModel()
     private lazy var slashPanel = SlashMenuPanel(model: slashModel)
+    let headerLayout = HeaderLayout()
     let mediaModel = MediaToolbarModel()
     private lazy var mediaPanel = MediaToolbarPanel(model: mediaModel)
     /// Character index of the picture / video card currently selected on its own.

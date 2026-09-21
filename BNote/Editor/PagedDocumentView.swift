@@ -463,6 +463,11 @@ final class PagedDocumentView: NSView {
     private var options = CanvasOptions()
     private var isPaginating = false
 
+    /// Notion-style page top (cover, icon, title) hosted above the first sheet.
+    private var headerHost: NSHostingView<AnyView>?
+    private var headerHeightProvider: ((CGFloat) -> CGFloat)?
+    private var headerHeight: CGFloat = 0
+
     var pageCount: Int { max(1, pages.count) }
     /// X offset of the sheets inside this view; the ruler lines up with it.
     private(set) var pageOriginX: CGFloat = 0
@@ -608,6 +613,26 @@ final class PagedDocumentView: NSView {
         }
     }
 
+    func setHeader(_ view: AnyView?, height: ((CGFloat) -> CGFloat)?) {
+        headerHeightProvider = height
+        guard let view else {
+            headerHost?.removeFromSuperview()
+            headerHost = nil
+            headerHeight = 0
+            needsLayout = true
+            return
+        }
+        if let headerHost {
+            headerHost.rootView = view
+        } else {
+            let host = NSHostingView(rootView: view)
+            host.sizingOptions = []
+            addSubview(host, positioned: .below, relativeTo: nil)
+            headerHost = host
+        }
+        needsLayout = true
+    }
+
     // MARK: - Geometry
 
     private func layoutPages() {
@@ -615,7 +640,25 @@ final class PagedDocumentView: NSView {
         let width = max(visibleWidth, config.size.width + Metrics.sideInset * 2)
         pageOriginX = ((width - config.size.width) / 2).rounded()
 
-        var y = Metrics.gap
+        // Header column lines up with the sheet's text box.
+        if let headerHost, let provider = headerHeightProvider {
+            let contentWidth = config.contentSize.width
+            headerHeight = provider(contentWidth)
+            headerHost.frame = NSRect(x: 0, y: 0, width: width, height: headerHeight)
+            if let layout = controller?.headerLayout {
+                let leading = pageOriginX + config.margins.left
+                if abs(layout.leading - leading) > 0.5 || abs(layout.width - contentWidth) > 0.5 {
+                    DispatchQueue.main.async {
+                        layout.leading = leading
+                        layout.width = contentWidth
+                    }
+                }
+            }
+        } else {
+            headerHeight = 0
+        }
+
+        var y = headerHeight + Metrics.gap
         for (index, page) in pages.enumerated() {
             page.pageNumber = index + 1
             page.frame = NSRect(x: pageOriginX, y: y, width: config.size.width, height: config.size.height)
@@ -1001,9 +1044,12 @@ final class EditorCanvasView: NSView {
 
 struct PagedEditor: NSViewRepresentable {
     @ObservedObject var controller: DocumentController
+    var header: AnyView?
+    var headerHeight: ((CGFloat) -> CGFloat)?
 
     func makeNSView(context: Context) -> EditorCanvasView {
         let view = EditorCanvasView(controller: controller)
+        view.canvas.setHeader(header, height: headerHeight)
         DispatchQueue.main.async {
             view.canvas.applyConfig(controller.config, options: controller.canvasOptions)
             view.apply(options: controller.canvasOptions)
@@ -1014,6 +1060,7 @@ struct PagedEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: EditorCanvasView, context: Context) {
+        nsView.canvas.setHeader(header, height: headerHeight)
         nsView.canvas.applyConfig(controller.config, options: controller.canvasOptions)
         nsView.apply(options: controller.canvasOptions)
         nsView.setRulerVisible(controller.canvasOptions.showRuler)
