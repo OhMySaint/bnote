@@ -14,8 +14,19 @@ final class PageTextView: NSTextView {
         super.keyDown(with: event)
     }
 
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        DebugLog.write("insertText \(String(describing: string).debugDescription) repl=\(replacementRange)")
+        super.insertText(string, replacementRange: replacementRange)
+    }
+
+    override func doCommand(by selector: Selector) {
+        DebugLog.write("textView.doCommand \(selector)")
+        super.doCommand(by: selector)
+    }
+
     /// Composition edits do not post `textDidChange`, so the menu is refreshed here.
     override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        DebugLog.write("setMarkedText \(String(describing: string)) sel=\(selectedRange) repl=\(replacementRange)")
         let controller = delegate as? DocumentController
         let edited = replacementRange.location == NSNotFound
             ? (hasMarkedText() ? markedRange() : self.selectedRange())

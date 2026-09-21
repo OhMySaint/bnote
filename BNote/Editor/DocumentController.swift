@@ -460,42 +460,53 @@ final class DocumentController: NSObject, ObservableObject {
             if style.isBold { font = manager.convert(font, toHaveTrait: .boldFontMask) }
             return font
         }
-
-        guard textStorage.length > 0 else {
-            var typing = activeTextView?.typingAttributes ?? EditorDefaults.bodyAttributes
-            typing[.font] = makeFont(typing[.font] as? NSFont)
-            let paragraph = NSMutableParagraphStyle()
+        let makeParagraph: (NSParagraphStyle?) -> NSMutableParagraphStyle = { existing in
+            let paragraph = (existing?.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
             paragraph.headerLevel = style.headerLevel
             paragraph.paragraphSpacing = style.spacingAfter
             paragraph.paragraphSpacingBefore = style.spacingBefore
-            typing[.paragraphStyle] = paragraph
-            activeTextView?.typingAttributes = typing
-            refreshFormatState()
-            return
+            return paragraph
         }
 
-        mutate(range: enclosingParagraphRange(for: selection)) {
-            for paragraph in ranges {
-                let clamped = NSRange(
-                    location: paragraph.location,
-                    length: min(paragraph.length, textStorage.length - paragraph.location)
-                )
-                guard clamped.length > 0 else { continue }
-                let current = textStorage.attribute(.font, at: clamped.location, effectiveRange: nil) as? NSFont
-                textStorage.addAttribute(.font, value: makeFont(current), range: clamped)
+        let populated = ranges.compactMap { paragraph -> NSRange? in
+            let clamped = NSRange(
+                location: paragraph.location,
+                length: min(paragraph.length, max(0, textStorage.length - paragraph.location))
+            )
+            return clamped.length > 0 ? clamped : nil
+        }
 
-                let paragraphStyle = paragraphStyle(at: clamped.location)
-                paragraphStyle.headerLevel = style.headerLevel
-                paragraphStyle.paragraphSpacing = style.spacingAfter
-                paragraphStyle.paragraphSpacingBefore = style.spacingBefore
-                textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: clamped)
-
-                if style.isMonospaced {
-                    textStorage.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: clamped)
-                } else {
-                    textStorage.removeAttribute(.backgroundColor, range: clamped)
+        if !populated.isEmpty {
+            mutate(range: enclosingParagraphRange(for: selection)) {
+                for clamped in populated {
+                    let current = textStorage.attribute(.font, at: clamped.location, effectiveRange: nil) as? NSFont
+                    textStorage.addAttribute(.font, value: makeFont(current), range: clamped)
+                    let existing = textStorage.attribute(.paragraphStyle, at: clamped.location, effectiveRange: nil) as? NSParagraphStyle
+                    textStorage.addAttribute(.paragraphStyle, value: makeParagraph(existing), range: clamped)
+                    if style.isMonospaced {
+                        textStorage.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: clamped)
+                    } else {
+                        textStorage.removeAttribute(.backgroundColor, range: clamped)
+                    }
                 }
             }
+        }
+
+        // An empty line has no characters to carry the style, and even on a
+        // populated line the caret's typing attributes must match, so whatever
+        // is typed next picks the style up (choose "/Đầu mục 1", then type).
+        if selection.length == 0 || populated.isEmpty, let textView = activeTextView {
+            var typing = textView.typingAttributes
+            if typing.isEmpty { typing = EditorDefaults.bodyAttributes }
+            typing[.font] = makeFont(typing[.font] as? NSFont)
+            typing[.paragraphStyle] = makeParagraph(typing[.paragraphStyle] as? NSParagraphStyle)
+            if style.isMonospaced {
+                typing[.backgroundColor] = NSColor.quaternaryLabelColor
+            } else {
+                typing.removeValue(forKey: .backgroundColor)
+            }
+            textView.typingAttributes = typing
+            refreshFormatState()
         }
     }
 
@@ -760,6 +771,7 @@ extension DocumentController {
         }
 
         let isNew = slashTrigger != slash
+        if isNew { DebugLog.write("menu open trigger=\(slash) query=\(query.debugDescription) matches=\(matches.count)") }
         slashTrigger = slash
         slashModel.query = query
         if slashModel.commands.map(\.id) != matches.map(\.id) {
@@ -780,6 +792,7 @@ extension DocumentController {
 
     func closeSlashMenu() {
         guard slashTrigger != nil || slashPanel.isVisible else { return }
+        DebugLog.write("menu close (was trigger=\(String(describing: slashTrigger)))")
         slashTrigger = nil
         slashPanel.hide()
     }
@@ -800,25 +813,38 @@ extension DocumentController {
     var isSlashMenuOpen: Bool { slashTrigger != nil && !slashModel.commands.isEmpty }
 
     /// Raw key handling for the menu. Returns true when the key was consumed.
+    /// Matches on characters as well as key codes: input methods that re-post
+    /// synthetic events (OpenKey, EVKey…) do not always keep the key code.
     func handleSlashKey(_ event: NSEvent, in textView: NSTextView) -> Bool {
+        let chars = event.charactersIgnoringModifiers ?? ""
+        DebugLog.write("keyDown code=\(event.keyCode) chars=\(chars.debugDescription) mods=\(event.modifierFlags.rawValue) menuOpen=\(isSlashMenuOpen) trigger=\(String(describing: slashTrigger)) marked=\(textView.hasMarkedText())")
         guard isSlashMenuOpen, !event.modifierFlags.contains(.command) else { return false }
-        switch event.keyCode {
-        case 125: // ↓
+
+        let scalar = chars.unicodeScalars.first.map { Int($0.value) }
+        let isDown = event.keyCode == 125 || scalar == NSDownArrowFunctionKey
+        let isUp = event.keyCode == 126 || scalar == NSUpArrowFunctionKey
+        let isCommit = [36, 76, 48].contains(event.keyCode) || chars == "\r" || chars == "\n" || chars == "\t"
+        let isEscape = event.keyCode == 53 || scalar == 27
+
+        if isDown {
             moveSlashSelection(1)
             return true
-        case 126: // ↑
+        }
+        if isUp {
             moveSlashSelection(-1)
             return true
-        case 36, 76, 48: // Return, keypad Enter, Tab
+        }
+        if isCommit {
+            DebugLog.write("commit via keyDown")
             finishComposition(in: textView)
             commitSlashSelection()
             return true
-        case 53: // Escape
+        }
+        if isEscape {
             dismissSlashMenu()
             return true
-        default:
-            return false
         }
+        return false
     }
 
     /// Keeps whatever the input method has composed so far as plain text.
@@ -840,6 +866,7 @@ extension DocumentController {
     }
 
     func runSlashCommand(_ command: SlashCommand) {
+        DebugLog.write("run command=\(command.id) trigger=\(String(describing: slashTrigger))")
         guard let textView = activeTextView, let trigger = slashTrigger else { return }
         finishComposition(in: textView)
         let caret = textView.selectedRange().location
@@ -1059,19 +1086,23 @@ extension DocumentController {
     }
 
     private func styleCurrentParagraphs(_ transform: (inout [NSAttributedString.Key: Any]) -> Void) {
-        guard let textView = activeTextView, textStorage.length > 0 else { return }
-        let string = textStorage.string as NSString
+        guard let textView = activeTextView else { return }
         let selection = textView.selectedRange()
         let paragraph = paragraphRange(at: selection.location)
         let range = NSRange(location: paragraph.location, length: max(0, min(paragraph.length, textStorage.length - paragraph.location)))
-        guard range.length > 0 else { return }
-        mutate(range: range) {
-            textStorage.enumerateAttributes(in: range) { attributes, subrange, _ in
-                var updated = attributes
-                transform(&updated)
-                textStorage.setAttributes(updated, range: subrange)
+        if range.length > 0 {
+            mutate(range: range) {
+                textStorage.enumerateAttributes(in: range) { attributes, subrange, _ in
+                    var updated = attributes
+                    transform(&updated)
+                    textStorage.setAttributes(updated, range: subrange)
+                }
             }
         }
+        var typing = textView.typingAttributes
+        if typing.isEmpty { typing = EditorDefaults.bodyAttributes }
+        transform(&typing)
+        textView.typingAttributes = typing
     }
 
     // MARK: Checkbox
@@ -1137,6 +1168,7 @@ extension DocumentController: NSTextViewDelegate {
 
     /// While the "/" menu is open it owns the arrow keys, Enter and Escape.
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        DebugLog.write("doCommandBy \(selector) menuOpen=\(isSlashMenuOpen)")
         guard isSlashMenuOpen else { return false }
         switch selector {
         case #selector(NSResponder.moveDown(_:)):
@@ -1158,6 +1190,7 @@ extension DocumentController: NSTextViewDelegate {
 
     /// Enter inside a list continues it; Enter on an empty item leaves the list.
     func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        DebugLog.write("shouldChange range=\(affectedCharRange) repl=\((replacementString ?? "<attr>").debugDescription) menuOpen=\(isSlashMenuOpen)")
         noteEditForSlashDismissal(at: affectedCharRange)
 
         // Last line of defence: an input method may hand Return/Tab over as
