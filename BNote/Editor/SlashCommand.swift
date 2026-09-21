@@ -54,9 +54,13 @@ enum SlashCatalog {
             symbol: "lightbulb", section: "Khối", keywords: ["ghi chu", "callout", "noi bat", "note"]
         ) { $0.insertCallout() },
         SlashCommand(
-            id: "code", title: "Khối mã", subtitle: "Chữ đều nét, nền xám",
+            id: "code", title: "Khối mã", subtitle: "Khung mã có tô màu cú pháp",
             symbol: "chevron.left.forwardslash.chevron.right", section: "Khối", keywords: ["ma", "code", "block"]
         ) { $0.apply(style: .code) },
+        SlashCommand(
+            id: "inlinecode", title: "Mã nội dòng", subtitle: "Chữ đều nét cho tên hàm, lệnh",
+            symbol: "curlybraces", section: "Khối", keywords: ["ma", "code", "inline", "noi dong"]
+        ) { $0.toggleInlineCode() },
         SlashCommand(
             id: "divider", title: "Đường kẻ ngang", subtitle: "Ngăn cách hai phần",
             symbol: "minus", section: "Khối", keywords: ["duong ke", "divider", "line", "ngan cach"]

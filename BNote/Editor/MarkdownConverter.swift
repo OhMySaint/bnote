@@ -11,18 +11,31 @@ enum MarkdownConverter {
 
         var lines: [String] = []
         var location = 0
+        var inCode = false
         while location < string.length {
             let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
             location = paragraph.upperBound
 
             let raw = string.substring(with: paragraph).trimmingCharacters(in: .newlines)
+            let font = attributed.attribute(.font, at: paragraph.location, effectiveRange: nil) as? NSFont
+            let style = attributed.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+
+            // Code blocks become fenced verbatim text.
+            let isCode = (font?.isFixedPitch ?? false) && !(style?.textBlocks.isEmpty ?? true)
+            if isCode != inCode {
+                lines.append("```")
+                inCode = isCode
+            }
+            if isCode {
+                lines.append(raw)
+                continue
+            }
+
             if raw.trimmingCharacters(in: .whitespaces).isEmpty {
                 lines.append("")
                 continue
             }
 
-            let font = attributed.attribute(.font, at: paragraph.location, effectiveRange: nil) as? NSFont
-            let style = attributed.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
             let textStyle = TextStyle.detect(font: font, paragraph: style)
 
             var contentRange = paragraph
@@ -44,6 +57,7 @@ enum MarkdownConverter {
             lines.append(prefix + inlineMarkdown(from: attributed, range: contentRange))
         }
 
+        if inCode { lines.append("```") }
         return lines.joined(separator: "\n")
     }
 
@@ -90,10 +104,21 @@ enum MarkdownConverter {
     static func attributedString(fromMarkdown markdown: String) -> NSAttributedString {
         let result = NSMutableAttributedString()
         var inCodeBlock = false
+        var codeBlock: NSTextBlock?
 
         for line in markdown.components(separatedBy: .newlines) {
             if line.hasPrefix("```") {
                 inCodeBlock.toggle()
+                codeBlock = inCodeBlock ? CodeHighlighter.makeBlock() : nil
+                continue
+            }
+            if inCodeBlock, let codeBlock {
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: CodeHighlighter.font,
+                    .foregroundColor: NSColor.textColor,
+                    .paragraphStyle: CodeHighlighter.paragraphStyle(sharing: codeBlock),
+                ]
+                result.append(NSAttributedString(string: line + "\n", attributes: attributes))
                 continue
             }
 

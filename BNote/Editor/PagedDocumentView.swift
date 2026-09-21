@@ -19,6 +19,66 @@ final class PageTextView: NSTextView {
         super.insertText(string, replacementRange: replacementRange)
     }
 
+    /// Pictures, image files and media links paste as rich content.
+    override func paste(_ sender: Any?) {
+        if let controller = delegate as? DocumentController,
+           controller.pasteFromPasteboard(NSPasteboard.general, in: self) {
+            return
+        }
+        super.paste(sender)
+    }
+
+    /// Right-clicking a picture offers copy / save / open link.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        guard let controller = delegate as? DocumentController, let container = textContainer else { return menu }
+        let point = convert(event.locationInWindow, from: nil)
+        let index = layoutManager?.characterIndex(for: point, in: container, fractionOfDistanceBetweenInsertionPoints: nil) ?? NSNotFound
+        guard index != NSNotFound, index < (textStorage?.length ?? 0) else { return menu }
+
+        var extras: [NSMenuItem] = []
+        if textStorage?.attribute(.attachment, at: index, effectiveRange: nil) is NSTextAttachment {
+            let copy = NSMenuItem(title: "Sao chép ảnh", action: #selector(copyImageAction(_:)), keyEquivalent: "")
+            copy.representedObject = index
+            let save = NSMenuItem(title: "Lưu ảnh…", action: #selector(saveImageAction(_:)), keyEquivalent: "")
+            save.representedObject = index
+            extras += [copy, save]
+        }
+        if let url = controller.link(at: index) {
+            let open = NSMenuItem(title: "Mở liên kết trong app", action: #selector(openLinkAction(_:)), keyEquivalent: "")
+            open.representedObject = url
+            let browser = NSMenuItem(title: "Mở bằng trình duyệt", action: #selector(openInBrowserAction(_:)), keyEquivalent: "")
+            browser.representedObject = url
+            extras += [open, browser]
+        }
+        guard !extras.isEmpty else { return menu }
+        for (offset, item) in (extras + [NSMenuItem.separator()]).enumerated() {
+            item.target = self
+            menu.insertItem(item, at: offset)
+        }
+        return menu
+    }
+
+    @objc private func copyImageAction(_ sender: NSMenuItem) {
+        guard let index = sender.representedObject as? Int else { return }
+        (delegate as? DocumentController)?.copyImage(at: index)
+    }
+
+    @objc private func saveImageAction(_ sender: NSMenuItem) {
+        guard let index = sender.representedObject as? Int else { return }
+        (delegate as? DocumentController)?.saveImage(at: index)
+    }
+
+    @objc private func openLinkAction(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        MediaViewerPanel.shared.open(url)
+    }
+
+    @objc private func openInBrowserAction(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     override func doCommand(by selector: Selector) {
         DebugLog.write("textView.doCommand \(selector)")
         super.doCommand(by: selector)
@@ -41,13 +101,89 @@ final class PageTextView: NSTextView {
         (delegate as? DocumentController)?.updateSlashMenu()
     }
 
+    // MARK: Picture selection, resize handles, drop
+
+    private static let handleSize: CGFloat = 9
+    private var resizing: (index: Int, startWidth: CGFloat, startX: CGFloat)?
+
+    private var selectedPictureRect: NSRect? {
+        guard let controller = delegate as? DocumentController,
+              let index = controller.selectedAttachmentIndex,
+              selectedRange().length == 1, selectedRange().location == index
+        else { return nil }
+        return controller.attachmentRect(at: index, in: self)
+    }
+
+    private func resizeHandleRect(for rect: NSRect) -> NSRect {
+        let s = Self.handleSize
+        return NSRect(x: rect.maxX - s / 2, y: rect.maxY - s / 2, width: s, height: s)
+    }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if let controller = delegate as? DocumentController,
-           controller.handleCheckboxClick(at: point, in: self) {
-            return
+        if let controller = delegate as? DocumentController {
+            if let rect = selectedPictureRect, resizeHandleRect(for: rect).insetBy(dx: -5, dy: -5).contains(point),
+               let index = controller.selectedAttachmentIndex {
+                resizing = (index, rect.width, point.x)
+                return
+            }
+            if controller.handleCheckboxClick(at: point, in: self) { return }
+            // A click on a picture selects the picture, not the gap beside it.
+            if event.clickCount == 1, let container = textContainer, let layoutManager {
+                let local = NSPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
+                var fraction: CGFloat = 0
+                let index = layoutManager.characterIndex(for: local, in: container, fractionOfDistanceBetweenInsertionPoints: &fraction)
+                if index < (textStorage?.length ?? 0), controller.attachment(at: index)?.image != nil,
+                   let rect = controller.attachmentRect(at: index, in: self), rect.contains(point) {
+                    window?.makeFirstResponder(self)
+                    setSelectedRange(NSRange(location: index, length: 1))
+                    return
+                }
+            }
         }
         super.mouseDown(with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let resizing, let controller = delegate as? DocumentController else {
+            super.mouseDragged(with: event)
+            return
+        }
+        let point = convert(event.locationInWindow, from: nil)
+        let width = resizing.startWidth + (point.x - resizing.startX)
+        controller.resizeAttachment(at: resizing.index, width: width)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if resizing != nil {
+            resizing = nil
+            return
+        }
+        super.mouseUp(with: event)
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if let rect = selectedPictureRect {
+            addCursorRect(resizeHandleRect(for: rect).insetBy(dx: -4, dy: -4), cursor: .crosshair)
+        }
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let pasteboard = sender.draggingPasteboard
+        if pasteboard.canReadObject(forClasses: [NSImage.self, NSURL.self], options: nil) { return .copy }
+        return super.draggingEntered(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+        // Text dragged from within the document keeps AppKit's own handling.
+        let external = sender.draggingSource as? NSTextView == nil
+        if external, let controller = delegate as? DocumentController {
+            let point = convert(sender.draggingLocation, from: nil)
+            if controller.handleDrop(pasteboard, at: point, in: self) { return true }
+        }
+        return super.performDragOperation(sender)
     }
 
     /// Shown on the first page while the document is empty.
@@ -55,6 +191,17 @@ final class PageTextView: NSTextView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        if let rect = selectedPictureRect {
+            NSColor.controlAccentColor.setStroke()
+            let outline = NSBezierPath(rect: rect.insetBy(dx: -1, dy: -1))
+            outline.lineWidth = 2
+            outline.stroke()
+            let handle = NSBezierPath(ovalIn: resizeHandleRect(for: rect))
+            NSColor.white.setFill()
+            handle.fill()
+            handle.lineWidth = 1.5
+            handle.stroke()
+        }
         guard let placeholder,
               textStorage?.length == 0,
               layoutManager?.textContainers.first === textContainer
@@ -624,7 +771,7 @@ final class RulerView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.windowBackgroundColor.setFill()
+        NSColor.underPageBackgroundColor.setFill()
         bounds.fill()
 
         let pageStart = x(forPagePoint: 0)
@@ -769,7 +916,7 @@ final class EditorCanvasView: NSView {
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = true
-        scrollView.backgroundColor = NSColor.windowBackgroundColor
+        scrollView.backgroundColor = NSColor.underPageBackgroundColor
         scrollView.borderType = .noBorder
         scrollView.allowsMagnification = true
         scrollView.minMagnification = 0.5

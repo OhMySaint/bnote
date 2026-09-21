@@ -54,6 +54,10 @@ final class DocumentController: NSObject, ObservableObject {
 
     let slashModel = SlashMenuModel()
     private lazy var slashPanel = SlashMenuPanel(model: slashModel)
+    let mediaModel = MediaToolbarModel()
+    private lazy var mediaPanel = MediaToolbarPanel(model: mediaModel)
+    /// Character index of the picture / video card currently selected on its own.
+    private(set) var selectedAttachmentIndex: Int?
     /// Character offset of the "/" that opened the block menu.
     private(set) var slashTrigger: Int?
     /// A "/" the user typed past or dismissed; it stays closed until the next one.
@@ -69,6 +73,17 @@ final class DocumentController: NSObject, ObservableObject {
         slashModel.onPick = { [weak self] command in
             self?.runSlashCommand(command)
         }
+        mediaModel.onResize = { [weak self] fraction in self?.resizeSelectedAttachment(fraction: fraction) }
+        mediaModel.onAlign = { [weak self] alignment in
+            self?.setAlignment(alignment)
+            self?.mediaModel.alignment = alignment
+        }
+        mediaModel.onCopy = { [weak self] in if let index = self?.selectedAttachmentIndex { self?.copyImage(at: index) } }
+        mediaModel.onSave = { [weak self] in if let index = self?.selectedAttachmentIndex { self?.saveImage(at: index) } }
+        mediaModel.onOpen = { [weak self] in
+            if let index = self?.selectedAttachmentIndex, let url = self?.link(at: index) { MediaViewerPanel.shared.open(url) }
+        }
+        mediaModel.onDelete = { [weak self] in self?.deleteSelectedAttachment() }
     }
 
     // MARK: - Document lifecycle
@@ -76,6 +91,7 @@ final class DocumentController: NSObject, ObservableObject {
     func load(data: Data?, plainText: String, config: PageConfig) {
         isLoading = true
         saveWork?.cancel()
+        hideMediaToolbar()
 
         let attributed: NSAttributedString
         if let data, let restored = Self.attributedString(from: data) {
@@ -85,6 +101,7 @@ final class DocumentController: NSObject, ObservableObject {
         }
 
         textStorage.setAttributedString(attributed)
+        highlightAllCode()
         closeSlashMenu()
         slashDismissedTrigger = nil
         self.config = config
@@ -143,6 +160,9 @@ final class DocumentController: NSObject, ObservableObject {
 
     func documentDidChange() {
         guard !isLoading else { return }
+        if let caret = activeTextView?.selectedRange().location {
+            highlightCode(around: max(0, caret - 1))
+        }
         documentView?.updatePagination()
         renumberLists()
         refreshDerivedState()
@@ -446,6 +466,10 @@ final class DocumentController: NSObject, ObservableObject {
     }
 
     func apply(style: TextStyle) {
+        if style == .code {
+            applyCodeBlock()
+            return
+        }
         let selection = selectedRange
         let ranges = paragraphRanges(for: selection)
         let manager = NSFontManager.shared
@@ -467,6 +491,11 @@ final class DocumentController: NSObject, ObservableObject {
             paragraph.headerLevel = style.headerLevel
             paragraph.paragraphSpacing = style.spacingAfter
             paragraph.paragraphSpacingBefore = style.spacingBefore
+            // Picking a text style leaves a quote / callout / code frame; tables stay.
+            if paragraph.textBlocks.first?.isDecoration ?? true {
+                paragraph.textBlocks = []
+                paragraph.lineHeightMultiple = 0
+            }
             return paragraph
         }
 
@@ -634,22 +663,151 @@ final class DocumentController: NSObject, ObservableObject {
 
     // MARK: - Attachments
 
-    func insertImage(_ image: NSImage) {
+    func insertImage(_ image: NSImage, link: URL? = nil) {
+        let limited = image.limited()
         let attachment = NSTextAttachment()
         let maxWidth = config.contentSize.width
-        var size = image.size
+        var size = limited.size
         if size.width > maxWidth {
             let scale = maxWidth / size.width
             size = NSSize(width: maxWidth, height: size.height * scale)
         }
-        image.size = size
-        attachment.image = image
+        attachment.image = limited
         attachment.bounds = NSRect(origin: .zero, size: size)
 
+        let block = NSMutableAttributedString(attachment: attachment)
+        if let link {
+            block.addAttribute(.link, value: link, range: NSRange(location: 0, length: block.length))
+        }
         let range = selectedRange
         mutate(range: range, replacement: " ") {
-            textStorage.replaceCharacters(in: range, with: NSAttributedString(attachment: attachment))
+            textStorage.replaceCharacters(in: range, with: block)
         }
+        activeTextView?.setSelectedRange(NSRange(location: min(range.location + 1, textStorage.length), length: 0))
+        activeTextView?.typingAttributes = EditorDefaults.bodyAttributes
+    }
+
+    /// Pasted link: YouTube becomes a playable card, an image URL becomes the
+    /// picture, anything else a clickable link.
+    func insertMediaLink(_ url: URL) {
+        if let id = MediaLink.youtubeID(from: url) {
+            let placeholder = insertLinkText(url.absoluteString, url: url)
+            Task { [weak self] in
+                guard let self, let thumbnail = await MediaFetcher.image(from: MediaLink.thumbnailURL(youtubeID: id)) else { return }
+                await MainActor.run {
+                    let card = MediaCard.youtube(thumbnail: thumbnail, width: min(560, self.config.contentSize.width))
+                    self.replaceLinkPlaceholder(placeholder, with: card, url: url)
+                }
+            }
+            return
+        }
+        if MediaLink.isImageURL(url) {
+            let placeholder = insertLinkText(url.absoluteString, url: url)
+            Task { [weak self] in
+                guard let self, let image = await MediaFetcher.image(from: url) else { return }
+                await MainActor.run { self.replaceLinkPlaceholder(placeholder, with: image, url: url) }
+            }
+            return
+        }
+        _ = insertLinkText(url.absoluteString, url: url)
+    }
+
+    @discardableResult
+    private func insertLinkText(_ text: String, url: URL) -> String {
+        guard let textView = activeTextView else { return text }
+        var attributes = textView.typingAttributes
+        if attributes.isEmpty { attributes = EditorDefaults.bodyAttributes }
+        attributes[.link] = url
+        attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+        attributes[.foregroundColor] = NSColor.linkColor
+        let range = textView.selectedRange()
+        mutate(range: range, replacement: text) {
+            textStorage.replaceCharacters(in: range, with: NSAttributedString(string: text, attributes: attributes))
+        }
+        textView.setSelectedRange(NSRange(location: min(range.location + (text as NSString).length, textStorage.length), length: 0))
+        textView.typingAttributes = EditorDefaults.bodyAttributes
+        return text
+    }
+
+    /// Swaps the plain link that was inserted first for the fetched picture.
+    private func replaceLinkPlaceholder(_ text: String, with image: NSImage, url: URL) {
+        let string = textStorage.string as NSString
+        let found = string.range(of: text, options: .backwards)
+        guard found.location != NSNotFound, let textView = activeTextView else { return }
+        textView.setSelectedRange(found)
+        let caret = found.location
+        insertImage(image, link: url)
+        textView.setSelectedRange(NSRange(location: min(caret + 1, textStorage.length), length: 0))
+    }
+
+    /// Everything the pasteboard can offer, richest first. Returns false to fall
+    /// back to the text view's own paste.
+    func pasteFromPasteboard(_ pasteboard: NSPasteboard, in textView: NSTextView) -> Bool {
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           !urls.isEmpty {
+            let images = urls.compactMap { MediaLink.isImageURL($0) ? NSImage(contentsOf: $0) : nil }
+            if !images.isEmpty {
+                for image in images { insertImage(image) }
+                return true
+            }
+        }
+        if !pasteboard.types.orEmpty.contains(.rtfd),
+           let image = pasteboard.readObjects(forClasses: [NSImage.self], options: nil)?.first as? NSImage {
+            insertImage(image)
+            return true
+        }
+        if let text = pasteboard.string(forType: .string), let url = MediaLink.url(fromPastedText: text) {
+            insertMediaLink(url)
+            return true
+        }
+        if isCodeParagraph(at: textView.selectedRange().location), let text = pasteboard.string(forType: .string) {
+            insertPlainText(text)
+            return true
+        }
+        return false
+    }
+
+    func insertPlainText(_ text: String) {
+        guard let textView = activeTextView else { return }
+        let range = textView.selectedRange()
+        var attributes = textView.typingAttributes
+        if attributes.isEmpty { attributes = EditorDefaults.bodyAttributes }
+        mutate(range: range, replacement: text) {
+            textStorage.replaceCharacters(in: range, with: NSAttributedString(string: text, attributes: attributes))
+        }
+        textView.setSelectedRange(NSRange(location: min(range.location + (text as NSString).length, textStorage.length), length: 0))
+    }
+
+    func copyImage(at index: Int) {
+        guard index < textStorage.length,
+              let attachment = textStorage.attribute(.attachment, at: index, effectiveRange: nil) as? NSTextAttachment,
+              let image = attachment.image ?? attachment.attachmentCell.flatMap({ ($0 as? NSTextAttachmentCell)?.image })
+        else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+    }
+
+    func saveImage(at index: Int) {
+        guard index < textStorage.length,
+              let attachment = textStorage.attribute(.attachment, at: index, effectiveRange: nil) as? NSTextAttachment,
+              let image = attachment.image,
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:])
+        else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "Ảnh.png"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? png.write(to: url)
+    }
+
+    func link(at index: Int) -> URL? {
+        guard index < textStorage.length else { return nil }
+        let value = textStorage.attribute(.link, at: index, effectiveRange: nil)
+        if let url = value as? URL { return url }
+        if let string = value as? String { return URL(string: string) }
+        return nil
     }
 
     func insertPageBreak() {
@@ -1123,6 +1281,209 @@ extension DocumentController {
         textView.typingAttributes = typing
     }
 
+    // MARK: Code
+
+    func isCodeParagraph(at location: Int) -> Bool {
+        let paragraph = paragraphRange(at: location)
+        let index = paragraph.location < textStorage.length ? paragraph.location : nil
+        if let index, let font = textStorage.attribute(.font, at: index, effectiveRange: nil) as? NSFont {
+            return font.isFixedPitch && (textStorage.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle)?.textBlocks.isEmpty == false
+        }
+        if let font = activeTextView?.typingAttributes[.font] as? NSFont,
+           let style = activeTextView?.typingAttributes[.paragraphStyle] as? NSParagraphStyle {
+            return font.isFixedPitch && !style.textBlocks.isEmpty
+        }
+        return false
+    }
+
+    /// Turns the selected paragraphs into one framed, monospaced, highlighted block.
+    func applyCodeBlock() {
+        guard let textView = activeTextView else { return }
+        let selection = textView.selectedRange()
+        let ranges = paragraphRanges(for: selection)
+
+        // Join an adjacent code block so Enter-continued lines share its frame.
+        let block: NSTextBlock = {
+            let previous = (ranges.first?.location ?? 0) - 1
+            if previous >= 0, previous < textStorage.length,
+               let style = textStorage.attribute(.paragraphStyle, at: previous, effectiveRange: nil) as? NSParagraphStyle,
+               let existing = style.textBlocks.first, existing.isDecoration,
+               (textStorage.attribute(.font, at: previous, effectiveRange: nil) as? NSFont)?.isFixedPitch == true {
+                return existing
+            }
+            return CodeHighlighter.makeBlock()
+        }()
+        let paragraphStyle = CodeHighlighter.paragraphStyle(sharing: block)
+
+        let populated = ranges.compactMap { paragraph -> NSRange? in
+            let clamped = NSRange(location: paragraph.location, length: min(paragraph.length, max(0, textStorage.length - paragraph.location)))
+            return clamped.length > 0 ? clamped : nil
+        }
+        if !populated.isEmpty {
+            let whole = NSRange(location: populated.first!.location, length: populated.last!.upperBound - populated.first!.location)
+            mutate(range: whole) {
+                for clamped in populated {
+                    // Strip list markers: a code line is not a list item.
+                    textStorage.setAttributes([
+                        .font: CodeHighlighter.font,
+                        .foregroundColor: NSColor.textColor,
+                        .paragraphStyle: paragraphStyle,
+                    ], range: clamped)
+                }
+                CodeHighlighter.highlight(textStorage, range: whole)
+            }
+        }
+
+        if selection.length == 0 || populated.isEmpty {
+            textView.typingAttributes = [
+                .font: CodeHighlighter.font,
+                .foregroundColor: NSColor.textColor,
+                .paragraphStyle: paragraphStyle,
+            ]
+            refreshFormatState()
+        }
+    }
+
+    /// Monospace + tint on the selection, or for what is typed next.
+    func toggleInlineCode() {
+        let isCode = (format.fontFamily == CodeHighlighter.font.familyName) && format.style != .code
+        if isCode {
+            applyAttributes([.font: EditorDefaults.bodyFont])
+            setHighlight(nil)
+        } else {
+            applyAttributes([
+                .font: CodeHighlighter.font,
+                .backgroundColor: NSColor.textColor.withAlphaComponent(0.08),
+            ])
+        }
+    }
+
+    /// Re-colours the contiguous code block around `location`.
+    func highlightCode(around location: Int) {
+        guard textStorage.length > 0, isCodeParagraph(at: location) else { return }
+        let string = textStorage.string as NSString
+        var start = paragraphRange(at: min(location, textStorage.length)).location
+        var end = paragraphRange(at: min(location, textStorage.length)).upperBound
+        while start > 0, isCodeParagraph(at: start - 1) {
+            start = string.paragraphRange(for: NSRange(location: start - 1, length: 0)).location
+        }
+        while end < string.length, isCodeParagraph(at: end) {
+            end = string.paragraphRange(for: NSRange(location: end, length: 0)).upperBound
+        }
+        let range = NSRange(location: start, length: min(end, textStorage.length) - start)
+        guard range.length > 0 else { return }
+        textStorage.beginEditing()
+        CodeHighlighter.highlight(textStorage, range: range)
+        textStorage.endEditing()
+    }
+
+    func highlightAllCode() {
+        let string = textStorage.string as NSString
+        var location = 0
+        textStorage.beginEditing()
+        while location < string.length {
+            let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+            if isCodeParagraph(at: paragraph.location) {
+                CodeHighlighter.highlight(textStorage, range: paragraph)
+            }
+            location = paragraph.upperBound
+        }
+        textStorage.endEditing()
+    }
+
+    // MARK: Media selection
+
+    func attachment(at index: Int) -> NSTextAttachment? {
+        guard index >= 0, index < textStorage.length else { return nil }
+        return textStorage.attribute(.attachment, at: index, effectiveRange: nil) as? NSTextAttachment
+    }
+
+    /// Selecting exactly one picture shows the floating media bar over it.
+    func updateMediaToolbar() {
+        guard let textView = activeTextView else { hideMediaToolbar(); return }
+        let selection = textView.selectedRange()
+        guard selection.length == 1, let attachment = attachment(at: selection.location), attachment.image != nil else {
+            hideMediaToolbar()
+            return
+        }
+        selectedAttachmentIndex = selection.location
+        mediaModel.widthFraction = attachment.bounds.width / max(config.contentSize.width, 1)
+        mediaModel.alignment = (textStorage.attribute(.paragraphStyle, at: selection.location, effectiveRange: nil) as? NSParagraphStyle)?.alignment ?? .left
+        let url = link(at: selection.location)
+        mediaModel.hasLink = url != nil
+        mediaModel.isVideo = url.map { MediaLink.youtubeID(from: $0) != nil } ?? false
+
+        if let rect = attachmentScreenRect(at: selection.location, in: textView) {
+            mediaPanel.show(above: rect, parent: textView.window)
+        }
+        textView.needsDisplay = true
+    }
+
+    func hideMediaToolbar() {
+        selectedAttachmentIndex = nil
+        mediaPanel.hide()
+    }
+
+    func attachmentRect(at index: Int, in textView: NSTextView) -> NSRect? {
+        guard let container = textView.textContainer, index < textStorage.length else { return nil }
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: NSRange(location: index, length: 1), actualCharacterRange: nil)
+        var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: container)
+        rect.origin.x += textView.textContainerOrigin.x
+        rect.origin.y += textView.textContainerOrigin.y
+        return rect
+    }
+
+    private func attachmentScreenRect(at index: Int, in textView: NSTextView) -> NSRect? {
+        guard let rect = attachmentRect(at: index, in: textView), let window = textView.window else { return nil }
+        return window.convertToScreen(textView.convert(rect, to: nil))
+    }
+
+    func resizeSelectedAttachment(fraction: CGFloat) {
+        guard let index = selectedAttachmentIndex else { return }
+        resizeAttachment(at: index, width: config.contentSize.width * fraction)
+    }
+
+    /// Replaces the attachment with a copy at the new width; going through the
+    /// text view keeps it undoable and triggers relayout.
+    func resizeAttachment(at index: Int, width: CGFloat) {
+        guard let textView = activeTextView, let old = attachment(at: index), let image = old.image else { return }
+        let natural = image.size
+        let clampedWidth = min(max(width, 40), config.contentSize.width)
+        let height = natural.width > 0 ? clampedWidth * natural.height / natural.width : clampedWidth
+        let replacement = NSTextAttachment()
+        replacement.image = image
+        replacement.bounds = NSRect(x: 0, y: 0, width: clampedWidth.rounded(), height: height.rounded())
+
+        let range = NSRange(location: index, length: 1)
+        guard textView.shouldChangeText(in: range, replacementString: nil) else { return }
+        textStorage.beginEditing()
+        textStorage.addAttribute(.attachment, value: replacement, range: range)
+        textStorage.endEditing()
+        textView.didChangeText()
+        documentDidChange()
+        textView.setSelectedRange(range)
+        updateMediaToolbar()
+    }
+
+    func deleteSelectedAttachment() {
+        guard let index = selectedAttachmentIndex, let textView = activeTextView else { return }
+        let range = NSRange(location: index, length: 1)
+        hideMediaToolbar()
+        mutate(range: range, replacement: "") {
+            textStorage.replaceCharacters(in: range, with: "")
+        }
+        textView.setSelectedRange(NSRange(location: index, length: 0))
+    }
+
+    /// Drop location → selection, then the same path as paste.
+    func handleDrop(_ pasteboard: NSPasteboard, at point: NSPoint, in textView: NSTextView) -> Bool {
+        guard let container = textView.textContainer else { return false }
+        let local = NSPoint(x: point.x - textView.textContainerOrigin.x, y: point.y - textView.textContainerOrigin.y)
+        let index = layoutManager.characterIndex(for: local, in: container, fractionOfDistanceBetweenInsertionPoints: nil)
+        textView.setSelectedRange(NSRange(location: min(index, textStorage.length), length: 0))
+        return pasteFromPasteboard(pasteboard, in: textView)
+    }
+
     // MARK: Checkbox
 
     /// Returns true when the click landed on a to-do marker and toggled it.
@@ -1182,6 +1543,7 @@ extension DocumentController: NSTextViewDelegate {
     func textViewDidChangeSelection(_ notification: Notification) {
         refreshFormatState()
         updateSlashMenu()
+        updateMediaToolbar()
     }
 
     /// While the "/" menu is open it owns the arrow keys, Enter and Escape.
@@ -1234,7 +1596,7 @@ extension DocumentController: NSTextViewDelegate {
                 ? textStorage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
                 : textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle
 
-            if let style, !style.textBlocks.isEmpty, !(style.textBlocks.first is NSTextTableBlock) {
+            if let style, let block = style.textBlocks.first, block.isDecoration {
                 let plain = NSMutableParagraphStyle()
                 plain.paragraphSpacing = TextStyle.body.spacingAfter
                 if paragraph.length > 0, paragraph.upperBound <= textStorage.length {
@@ -1300,15 +1662,22 @@ extension DocumentController: NSTextViewDelegate {
         return false
     }
 
+    /// Web links open inside the app (YouTube plays in place); anything else
+    /// goes to the system.
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
-        if let url = link as? URL {
+        let url: URL?
+        if let value = link as? URL { url = value } else if let string = link as? String { url = URL(string: string) } else { url = nil }
+        guard let url else { return false }
+        if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            MediaViewerPanel.shared.open(url)
+        } else {
             NSWorkspace.shared.open(url)
-            return true
         }
-        if let string = link as? String, let url = URL(string: string) {
-            NSWorkspace.shared.open(url)
-            return true
-        }
-        return false
+        return true
     }
+}
+
+
+private extension Optional where Wrapped == [NSPasteboard.PasteboardType] {
+    var orEmpty: [NSPasteboard.PasteboardType] { self ?? [] }
 }
