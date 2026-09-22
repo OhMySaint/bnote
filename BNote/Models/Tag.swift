@@ -9,8 +9,8 @@ enum HeaderAlignment: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .leading: "Trái"
-        case .center: "Giữa"
+        case .leading: "Left"
+        case .center: "Center"
         }
     }
 }
@@ -22,15 +22,15 @@ enum TagColor: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .gray: "Xám"
-        case .red: "Đỏ"
+        case .gray: "Gray"
+        case .red: "Red"
         case .orange: "Cam"
-        case .yellow: "Vàng"
-        case .green: "Xanh lá"
-        case .teal: "Xanh ngọc"
-        case .blue: "Xanh dương"
-        case .purple: "Tím"
-        case .pink: "Hồng"
+        case .yellow: "Yellow"
+        case .green: "Green"
+        case .teal: "Teal"
+        case .blue: "Blue"
+        case .purple: "Purple"
+        case .pink: "Pink"
         }
     }
 

@@ -63,17 +63,17 @@ struct FormatToolbar: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Kiểu đoạn văn")
+        .help("Paragraph style")
     }
 
     private var fontMenu: some View {
         Menu {
-            Section("Thường dùng") {
+            Section("Recent") {
                 ForEach(Self.commonFonts, id: \.self) { family in
                     Button(family) { controller.setFontFamily(family) }
                 }
             }
-            Section("Tất cả phông") {
+            Section("All fonts") {
                 ForEach(Self.allFamilies, id: \.self) { family in
                     Button(family) { controller.setFontFamily(family) }
                 }
@@ -85,7 +85,7 @@ struct FormatToolbar: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Phông chữ")
+        .help("Font")
     }
 
     /// Every face the current family offers, so "heavy", "light" or "condensed"
@@ -110,12 +110,12 @@ struct FormatToolbar: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .disabled(faces.count <= 1)
-        .help("Kiểu chữ / độ đậm của phông đang chọn")
+        .help("Typeface and weight of the current font")
     }
 
     private var sizeControls: some View {
         HStack(spacing: 0) {
-            ToolButton(icon: "minus", isOn: false, help: "Giảm cỡ chữ (⇧⌘,)") {
+            ToolButton(icon: "minus", isOn: false, help: "Smaller (⇧⌘,)") {
                 controller.nudgeFontSize(by: -1)
             }
             TextField("", text: $sizeText)
@@ -138,7 +138,7 @@ struct FormatToolbar: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            ToolButton(icon: "plus", isOn: false, help: "Tăng cỡ chữ (⇧⌘.)") {
+            ToolButton(icon: "plus", isOn: false, help: "Bigger (⇧⌘.)") {
                 controller.nudgeFontSize(by: 1)
             }
         }
@@ -146,19 +146,19 @@ struct FormatToolbar: View {
 
     private var traitButtons: some View {
         HStack(spacing: 1) {
-            ToolButton(icon: "bold", isOn: controller.format.bold, help: "Đậm (⌘B)") {
+            ToolButton(icon: "bold", isOn: controller.format.bold, help: "Bold (⌘B)") {
                 controller.toggleTrait(.boldFontMask)
             }
-            ToolButton(icon: "italic", isOn: controller.format.italic, help: "Nghiêng (⌘I)") {
+            ToolButton(icon: "italic", isOn: controller.format.italic, help: "Italic (⌘I)") {
                 controller.toggleTrait(.italicFontMask)
             }
-            ToolButton(icon: "underline", isOn: controller.format.underline, help: "Gạch chân (⌘U)") {
+            ToolButton(icon: "underline", isOn: controller.format.underline, help: "Underline (⌘U)") {
                 controller.toggleUnderline()
             }
-            ToolButton(icon: "strikethrough", isOn: controller.format.strikethrough, help: "Gạch ngang") {
+            ToolButton(icon: "strikethrough", isOn: controller.format.strikethrough, help: "Strikethrough") {
                 controller.toggleStrikethrough()
             }
-            ToolButton(icon: "eraser", isOn: false, help: "Xóa định dạng (⌘\\)") {
+            ToolButton(icon: "eraser", isOn: false, help: "Clear formatting (⌘\\)") {
                 controller.clearFormatting()
             }
         }
@@ -166,7 +166,7 @@ struct FormatToolbar: View {
 
     private var colorControls: some View {
         HStack(spacing: 2) {
-            ColorWell(icon: "character", color: controller.format.textColor, help: "Màu chữ") {
+            ColorWell(icon: "character", color: controller.format.textColor, help: "Text color") {
                 showTextPalette.toggle()
             }
             .popover(isPresented: $showTextPalette, arrowEdge: .bottom) {
@@ -176,7 +176,7 @@ struct FormatToolbar: View {
                 }
             }
 
-            ColorWell(icon: "highlighter", color: controller.format.highlight, help: "Màu nền chữ") {
+            ColorWell(icon: "highlighter", color: controller.format.highlight, help: "Highlight") {
                 showHighlightPalette.toggle()
             }
             .popover(isPresented: $showHighlightPalette, arrowEdge: .bottom) {
@@ -190,16 +190,16 @@ struct FormatToolbar: View {
 
     private var alignmentButtons: some View {
         HStack(spacing: 1) {
-            ToolButton(icon: "text.alignleft", isOn: controller.format.alignment == .left, help: "Canh trái (⇧⌘L)") {
+            ToolButton(icon: "text.alignleft", isOn: controller.format.alignment == .left, help: "Left (⇧⌘L)") {
                 controller.setAlignment(.left)
             }
-            ToolButton(icon: "text.aligncenter", isOn: controller.format.alignment == .center, help: "Canh giữa (⇧⌘E)") {
+            ToolButton(icon: "text.aligncenter", isOn: controller.format.alignment == .center, help: "Center (⇧⌘E)") {
                 controller.setAlignment(.center)
             }
-            ToolButton(icon: "text.alignright", isOn: controller.format.alignment == .right, help: "Canh phải (⇧⌘R)") {
+            ToolButton(icon: "text.alignright", isOn: controller.format.alignment == .right, help: "Right (⇧⌘R)") {
                 controller.setAlignment(.right)
             }
-            ToolButton(icon: "text.justify", isOn: controller.format.alignment == .justified, help: "Canh đều (⇧⌘J)") {
+            ToolButton(icon: "text.justify", isOn: controller.format.alignment == .justified, help: "Justify (⇧⌘J)") {
                 controller.setAlignment(.justified)
             }
         }
@@ -207,13 +207,13 @@ struct FormatToolbar: View {
 
     private var listButtons: some View {
         HStack(spacing: 1) {
-            ToolButton(icon: "list.bullet", isOn: controller.format.list == .bullet, help: "Danh sách chấm (⇧⌘8)") {
+            ToolButton(icon: "list.bullet", isOn: controller.format.list == .bullet, help: "Bulleted list (⇧⌘8)") {
                 controller.toggleList(.bullet)
             }
-            ToolButton(icon: "list.number", isOn: controller.format.list == .numbered, help: "Danh sách số (⇧⌘7)") {
+            ToolButton(icon: "list.number", isOn: controller.format.list == .numbered, help: "Numbered list (⇧⌘7)") {
                 controller.toggleList(.numbered)
             }
-            ToolButton(icon: "checklist", isOn: controller.format.list == .todo, help: "Việc cần làm (⇧⌘9)") {
+            ToolButton(icon: "checklist", isOn: controller.format.list == .todo, help: "To-do list (⇧⌘9)") {
                 controller.toggleList(.todo)
             }
         }
@@ -221,10 +221,10 @@ struct FormatToolbar: View {
 
     private var indentButtons: some View {
         HStack(spacing: 1) {
-            ToolButton(icon: "decrease.indent", isOn: false, help: "Giảm thụt lề (⌘[)") {
+            ToolButton(icon: "decrease.indent", isOn: false, help: "Decrease indent (⌘[)") {
                 controller.changeIndent(by: -EditorDefaults.tabIndent)
             }
-            ToolButton(icon: "increase.indent", isOn: false, help: "Tăng thụt lề (⌘])") {
+            ToolButton(icon: "increase.indent", isOn: false, help: "Increase indent (⌘])") {
                 controller.changeIndent(by: EditorDefaults.tabIndent)
             }
         }
@@ -246,7 +246,7 @@ struct FormatToolbar: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Giãn dòng")
+        .help("Line spacing")
     }
 
     private var insertMenu: some View {
@@ -259,11 +259,11 @@ struct FormatToolbar: View {
                 }
             }
         } label: {
-            Label("Chèn", systemImage: "plus")
+            Label("Insert", systemImage: "plus")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Chèn khối — hoặc gõ / trong tài liệu")
+        .help("Insert a block — or press / in the page")
     }
 }
 

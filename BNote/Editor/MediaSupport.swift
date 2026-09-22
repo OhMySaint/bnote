@@ -117,7 +117,7 @@ final class MediaViewerPanel: NSObject, WKNavigationDelegate {
     func open(_ url: URL) {
         currentURL = url
         let window = existingWindow()
-        window.title = url.host ?? "Xem"
+        window.title = url.host ?? "View"
         if let id = MediaLink.youtubeID(from: url) {
             // YouTube refuses a bare embed URL (error 153); it wants an embedding
             // page with a referrer, so wrap the player in a page of our own.
@@ -200,15 +200,15 @@ extension MediaViewerPanel: NSToolbarDelegate {
         item.target = self
         switch identifier {
         case Item.back:
-            item.label = "Quay lại"
+            item.label = "Back"
             item.image = NSImage(systemSymbolName: "chevron.left", accessibilityDescription: nil)
             item.action = #selector(goBack)
         case Item.reload:
-            item.label = "Tải lại"
+            item.label = "Reload"
             item.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil)
             item.action = #selector(reload)
         case Item.browser:
-            item.label = "Mở bằng trình duyệt"
+            item.label = "Open in browser"
             item.image = NSImage(systemSymbolName: "safari", accessibilityDescription: nil)
             item.action = #selector(openInBrowser)
         default:

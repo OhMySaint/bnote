@@ -12,7 +12,7 @@ enum DocumentFormat: String, CaseIterable, Identifiable {
         case .docx: "Word (.docx)"
         case .html: "HTML (.html)"
         case .markdown: "Markdown (.md)"
-        case .text: "Văn bản thuần (.txt)"
+        case .text: "Plain text (.txt)"
         case .pdf: "PDF (.pdf)"
         }
     }
@@ -46,8 +46,8 @@ enum DocumentIOError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unsupportedExport(let format): "Không xuất được định dạng \(format.label)."
-        case .pdfFailed: "Không tạo được file PDF."
+        case .unsupportedExport(let format): "Could not export as \(format.label)."
+        case .pdfFailed: "Could not create the PDF."
         }
     }
 }
@@ -93,7 +93,7 @@ struct ExportHeader {
             result.append(NSAttributedString(string: "\n", attributes: [.paragraphStyle: plain, .font: EditorDefaults.bodyFont]))
         }
 
-        let titleText = (icon.isEmpty ? "" : icon + " ") + (title.isEmpty ? "Trang không tên" : title)
+        let titleText = (icon.isEmpty ? "" : icon + " ") + (title.isEmpty ? "Untitled" : title)
         let titleStyle = NSMutableParagraphStyle()
         titleStyle.paragraphSpacing = subtitle.isEmpty ? 14 : 4
         titleStyle.paragraphSpacingBefore = 6
@@ -131,8 +131,8 @@ enum DocumentIO {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        panel.message = "Chọn tài liệu để nhập vào BNote"
-        panel.prompt = "Nhập"
+        panel.message = "Choose documents to import"
+        panel.prompt = "Import"
         panel.allowedContentTypes = importableExtensions.compactMap { UTType(filenameExtension: $0) }
 
         guard panel.runModal() == .OK else { return [] }
@@ -203,8 +203,8 @@ enum DocumentIO {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [format.contentType]
         panel.nameFieldStringValue = "\(sanitize(suggestedName)).\(format.fileExtension)"
-        panel.message = "Xuất tài liệu"
-        panel.prompt = "Xuất"
+        panel.message = "Export document"
+        panel.prompt = "Export"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try write(attributed: attributed, format: format, to: url, config: config, header: header)
     }

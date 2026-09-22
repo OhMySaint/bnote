@@ -108,7 +108,7 @@ final class Note {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
         let firstLine = content.split(separator: "\n").first.map(String.init) ?? ""
-        return firstLine.isEmpty ? "Trang không tên" : firstLine
+        return firstLine.isEmpty ? "Untitled" : firstLine
     }
 
     var snippet: String {

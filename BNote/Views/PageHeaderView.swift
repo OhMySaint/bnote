@@ -41,7 +41,7 @@ struct PageHeaderView: View {
     static func height(for note: Note, width: CGFloat) -> CGFloat {
         var total: CGFloat = note.hasCover ? note.coverHeight : 30
         total += note.showIcon ? (note.hasCover ? 66 - 32 : 50) : 0
-        let bounding = (note.title.isEmpty ? "Trang" : note.title) as NSString
+        let bounding = (note.title.isEmpty ? "Page" : note.title) as NSString
         let titleRect = bounding.boundingRect(
             with: NSSize(width: max(100, width - 8), height: 400),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
@@ -78,15 +78,15 @@ struct PageHeaderView: View {
             // Buttons live inside the banner, so showing them never moves anything.
             HStack(spacing: 6) {
                 if repositioning {
-                    Button("Lưu vị trí") { commitReposition() }
-                    Button("Hủy") { repositioning = false }
+                    Button("Save position") { commitReposition() }
+                    Button("Cancel") { repositioning = false }
                 } else {
-                    coverMenu(label: "Đổi ảnh bìa")
+                    coverMenu(label: "Change cover")
                     if note.coverData != nil {
-                        Button("Chỉnh vị trí") { startReposition() }
+                        Button("Reposition") { startReposition() }
                     }
-                    Button("Tùy chỉnh") { showHeaderOptions.toggle() }
-                    Button("Bỏ") { removeCover() }
+                    Button("Custom") { showHeaderOptions.toggle() }
+                    Button("Remove") { removeCover() }
                 }
             }
             .font(.caption)
@@ -97,7 +97,7 @@ struct PageHeaderView: View {
             .animation(.easeOut(duration: 0.15), value: coverHovering)
 
             if repositioning {
-                Text("Kéo ảnh để chỉnh vị trí")
+                Text("Drag the picture to reposition it")
                     .font(.caption)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -139,9 +139,9 @@ struct PageHeaderView: View {
 
     private func coverMenu(label: String) -> some View {
         Menu(label) {
-            Button("Chọn ảnh…") { pickCoverFile() }
-            Button("Dán ảnh từ clipboard") { pasteCover() }
-            Section("Màu nền") {
+            Button("Choose picture…") { pickCoverFile() }
+            Button("Paste picture from clipboard") { pasteCover() }
+            Section("Background") {
                 ForEach(CoverStyle.allCases) { style in
                     Button(style.label) {
                         note.coverData = nil
@@ -150,14 +150,14 @@ struct PageHeaderView: View {
                     }
                 }
             }
-            Section("Chiều cao") {
-                Button("Thấp") { note.coverHeight = 140 }
-                Button("Vừa") { note.coverHeight = 200 }
+            Section("Height") {
+                Button("Short") { note.coverHeight = 140 }
+                Button("Medium") { note.coverHeight = 200 }
                 Button("Cao") { note.coverHeight = 280 }
             }
             if note.hasCover {
                 Divider()
-                Button("Bỏ ảnh bìa", role: .destructive) { removeCover() }
+                Button("Remove cover", role: .destructive) { removeCover() }
             }
         }
     }
@@ -166,7 +166,7 @@ struct PageHeaderView: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
-        panel.prompt = "Đặt làm ảnh bìa"
+        panel.prompt = "Set as cover"
         guard panel.runModal() == .OK, let url = panel.url, let image = NSImage(contentsOf: url) else { return }
         setCover(image)
     }
@@ -201,12 +201,12 @@ struct PageHeaderView: View {
             if !note.hasCover {
                 HStack(spacing: 10) {
                     if !note.showIcon {
-                        ghostButton("face.smiling", "Thêm biểu tượng") { note.showIcon = true }
+                        ghostButton("face.smiling", "Add icon") { note.showIcon = true }
                     }
-                    coverMenu(label: "Thêm ảnh bìa")
+                    coverMenu(label: "Add cover")
                         .menuStyle(.borderlessButton)
                         .fixedSize()
-                    ghostButton("slider.horizontal.3", "Tùy chỉnh") { showHeaderOptions.toggle() }
+                    ghostButton("slider.horizontal.3", "Custom") { showHeaderOptions.toggle() }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -226,7 +226,7 @@ struct PageHeaderView: View {
                 if centered { Spacer(minLength: 0) }
             }
 
-            TextField("Trang không tên", text: $note.title, axis: .vertical)
+            TextField("Untitled", text: $note.title, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 34, weight: .bold))
                 .lineLimit(1...3)
@@ -235,7 +235,7 @@ struct PageHeaderView: View {
                 .onChange(of: note.title) { _, _ in note.touch() }
 
             if !note.subtitle.isEmpty || showHeaderOptions {
-                TextField("Mô tả ngắn cho trang này", text: $note.subtitle)
+                TextField("A short description of this page", text: $note.subtitle)
                     .textFieldStyle(.plain)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -252,8 +252,8 @@ struct PageHeaderView: View {
         .onHover { headerHovering = $0 }
         .popover(isPresented: $showHeaderOptions, arrowEdge: .bottom) { headerOptions }
         .contextMenu {
-            Button("Tùy chỉnh đầu trang…") { showHeaderOptions = true }
-            coverMenu(label: note.hasCover ? "Ảnh bìa" : "Thêm ảnh bìa")
+            Button("Customize header…") { showHeaderOptions = true }
+            coverMenu(label: note.hasCover ? "Cover" : "Add cover")
         }
     }
 
@@ -275,7 +275,7 @@ struct PageHeaderView: View {
                 .shadow(color: .black.opacity(note.hasCover ? 0.12 : 0), radius: 4, y: 1)
         }
         .buttonStyle(.plain)
-        .help("Đổi biểu tượng trang")
+        .help("Change page icon")
         .popover(isPresented: $showIconPicker, arrowEdge: .bottom) {
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(34)), count: 5), spacing: 4) {
                 ForEach(Self.icons, id: \.self) { icon in
@@ -298,31 +298,31 @@ struct PageHeaderView: View {
 
     private var headerOptions: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Đầu trang")
+            Text("Page header")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Picker("Canh tiêu đề", selection: Binding(get: { note.headerAlignment }, set: { note.headerAlignment = $0 })) {
+            Picker("Title alignment", selection: Binding(get: { note.headerAlignment }, set: { note.headerAlignment = $0 })) {
                 ForEach(HeaderAlignment.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
-            Toggle("Hiện biểu tượng", isOn: $note.showIcon)
+            Toggle("Show icon", isOn: $note.showIcon)
             Divider()
-            Toggle("Toàn chiều rộng", isOn: Binding(get: { note.fullWidth }, set: { note.fullWidth = $0; DocumentController.shared.canvasOptions.fullWidth = $0 }))
-            Toggle("Ảnh bìa", isOn: Binding(
+            Toggle("Full width", isOn: Binding(get: { note.fullWidth }, set: { note.fullWidth = $0; DocumentController.shared.canvasOptions.fullWidth = $0 }))
+            Toggle("Cover", isOn: Binding(
                 get: { note.hasCover },
                 set: { on in
                     if on { note.coverStyle = CoverStyle.ocean.rawValue } else { removeCover() }
                 }
             ))
             if note.hasCover {
-                Picker("Chiều cao bìa", selection: $note.coverHeight) {
-                    Text("Thấp").tag(140.0)
-                    Text("Vừa").tag(200.0)
+                Picker("Cover height", selection: $note.coverHeight) {
+                    Text("Short").tag(140.0)
+                    Text("Medium").tag(200.0)
                     Text("Cao").tag(280.0)
                 }
                 .pickerStyle(.segmented)
             }
-            Text("Mô tả ngắn hiện ngay dưới tiêu đề; để trống thì ẩn.")
+            Text("Shown right under the title; leave empty to hide it.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -343,7 +343,7 @@ struct PageHeaderView: View {
                 Image(systemName: "tag")
                     .foregroundStyle(.tertiary)
                     .font(.caption)
-                TextField(note.tags.isEmpty ? "Thêm thẻ" : "Thêm", text: $newTag)
+                TextField(note.tags.isEmpty ? "Add tag" : "Add", text: $newTag)
                     .textFieldStyle(.plain)
                     .font(.caption)
                     .frame(width: note.tags.isEmpty ? 70 : 46)

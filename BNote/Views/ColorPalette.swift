@@ -47,7 +47,7 @@ struct ColorSwatchPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(kind == .text ? "Màu chữ" : "Màu nền chữ")
+            Text(kind == .text ? "Text color" : "Highlight")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -57,7 +57,7 @@ struct ColorSwatchPicker: View {
                 HStack(spacing: 6) {
                     Image(systemName: kind == .text ? "textformat" : "slash.circle")
                         .frame(width: 16)
-                    Text(kind == .text ? "Tự động" : "Bỏ màu nền")
+                    Text(kind == .text ? "Automatic" : "No highlight")
                     Spacer()
                     if current == nil { Image(systemName: "checkmark").font(.caption) }
                 }
@@ -78,7 +78,7 @@ struct ColorSwatchPicker: View {
                 }
             }
 
-            Button("Tùy chỉnh…") {
+            Button("Customize…") {
                 openSystemPanel()
             }
             .buttonStyle(.link)

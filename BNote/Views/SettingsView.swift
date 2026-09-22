@@ -22,23 +22,23 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Đơn vị đo") {
-                Picker("Đơn vị", selection: $unitRaw) {
+            Section("Measurement units") {
+                Picker("Units", selection: $unitRaw) {
                     ForEach(MeasurementUnit.allCases) { Text($0.label).tag($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
             }
 
-            Section("Trang mới") {
-                Picker("Khổ giấy", selection: $paperRaw) {
+            Section("New page") {
+                Picker("Paper size", selection: $paperRaw) {
                     ForEach(Paper.allCases) { Text("\($0.label) — \($0.sizeLabel)").tag($0.rawValue) }
                 }
-                Picker("Hướng giấy", selection: $orientationRaw) {
+                Picker("Orientation", selection: $orientationRaw) {
                     ForEach(PageOrientation.allCases) { Text($0.label).tag($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
                 HStack {
-                    Text("Lề bốn cạnh")
+                    Text("Margins")
                     Slider(
                         value: Binding(get: { marginPoints / unit.points }, set: { marginPoints = $0 * unit.points }),
                         in: unit == .inch ? 0.25...2.0 : 0.5...5.0,
@@ -48,19 +48,19 @@ struct SettingsView: View {
                         .monospacedDigit()
                         .frame(width: 70, alignment: .trailing)
                 }
-                Text("Áp dụng cho trang tạo sau này; trang đang có chỉnh riêng trong bảng Trang.")
+                Text("Applies to pages created from now on; change existing pages in the Page inspector.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Mặc định cho trang mới") {
-                Picker("Kiểu trang", selection: $continuous) {
-                    Text("Liên tục (kiểu Notion)").tag(true)
-                    Text("Trang giấy rời").tag(false)
+            Section("Defaults for new pages") {
+                Picker("Page mode", selection: $continuous) {
+                    Text("Continuous (Notion style)").tag(true)
+                    Text("Paper pages").tag(false)
                 }
-                Toggle("Toàn chiều rộng (cột chữ giãn hết cửa sổ)", isOn: $fullWidth)
-                Toggle("Lưới ô vuông", isOn: $showGrid)
-                Toggle("Đường biên lề", isOn: $showGuides)
+                Toggle("Full width (text spans the window)", isOn: $fullWidth)
+                Toggle("Grid", isOn: $showGrid)
+                Toggle("Margin guides", isOn: $showGuides)
             }
         }
         .formStyle(.grouped)

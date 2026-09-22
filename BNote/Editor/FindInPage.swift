@@ -18,7 +18,7 @@ final class FindModel: ObservableObject {
     var hasMatches: Bool { !matches.isEmpty }
     var summary: String {
         if query.isEmpty { return "" }
-        return matches.isEmpty ? "Không thấy" : "\(current + 1)/\(matches.count)"
+        return matches.isEmpty ? "Not found" : "\(current + 1)/\(matches.count)"
     }
 
     fileprivate func set(matches: [NSRange], current: Int) {

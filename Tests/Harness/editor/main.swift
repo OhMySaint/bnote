@@ -493,7 +493,7 @@ controller.find.query = "mùa"; controller.findQueryChanged()
 controller.find.replacement = "tiết"
 controller.replaceAllMatches()
 check("Thay tất cả", controller.textStorage.string == "Huế tiết thu. hà nội tiết đông.\nSài Gòn nắng.", "text=\(controller.textStorage.string.replacingOccurrences(of: "\n", with: "⏎"))")
-check("Thay tất cả: không còn kết quả", controller.find.matches.isEmpty && controller.find.summary == "Không thấy")
+check("Thay tất cả: không còn kết quả", controller.find.matches.isEmpty && controller.find.summary == "Not found")
 controller.find.query = ""; controller.findQueryChanged()
 check("chuỗi rỗng: không kết quả, không tóm tắt", controller.find.matches.isEmpty && controller.find.summary.isEmpty)
 controller.find.query = "Sài"; controller.findQueryChanged()

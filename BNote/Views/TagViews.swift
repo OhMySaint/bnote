@@ -52,10 +52,10 @@ struct TagManagerView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Hệ thống thẻ")
+                Text("Tags")
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Text("\(tags.count) thẻ")
+                Text("\(tags.count) tags")
                     .foregroundStyle(.secondary)
             }
             .padding(16)
@@ -64,9 +64,9 @@ struct TagManagerView: View {
 
             if tags.isEmpty {
                 ContentUnavailableView(
-                    "Chưa có thẻ",
+                    "No tags yet",
                     systemImage: "tag",
-                    description: Text("Thêm thẻ ở đây hoặc ngay trên đầu mỗi trang.")
+                    description: Text("Add tags here, or at the top of any page.")
                 )
             } else {
                 List {
@@ -80,27 +80,27 @@ struct TagManagerView: View {
             Divider()
 
             HStack(spacing: 8) {
-                TextField("Thẻ mới…", text: $newTag)
+                TextField("New tag…", text: $newTag)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(addTag)
-                Button("Thêm", action: addTag)
+                Button("Add", action: addTag)
                     .disabled(Tag.key(for: newTag).isEmpty)
                 Spacer()
-                Button("Xong") { dismiss() }
+                Button("Done") { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
             .padding(12)
         }
         .frame(width: 460, height: 420)
         .confirmationDialog(
-            "Xóa thẻ “\(pendingDelete?.name ?? "")”?",
+            "Delete the tag “\(pendingDelete?.name ?? "")”?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
         ) {
-            Button("Xóa và gỡ khỏi \(pendingDelete.map { TagStore.usage(of: $0, in: notes) } ?? 0) trang", role: .destructive) {
+            Button("Delete and remove from \(pendingDelete.map { TagStore.usage(of: $0, in: notes) } ?? 0) pages", role: .destructive) {
                 if let tag = pendingDelete { TagStore.delete(tag, notes: notes, in: context) }
                 pendingDelete = nil
             }
-            Button("Hủy", role: .cancel) { pendingDelete = nil }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
         }
     }
 
@@ -122,16 +122,16 @@ struct TagManagerView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Đổi màu")
+            .help("Change color")
 
             if renaming?.persistentModelID == tag.persistentModelID {
-                TextField("Tên thẻ", text: $renameText)
+                TextField("Tag name", text: $renameText)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { commitRename(tag) }
-                Button("Lưu") { commitRename(tag) }
+                Button("Save") { commitRename(tag) }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                Button("Hủy") { renaming = nil }
+                Button("Cancel") { renaming = nil }
                     .controlSize(.small)
             } else {
                 Text(tag.name)
@@ -146,14 +146,14 @@ struct TagManagerView: View {
                     Image(systemName: "pencil")
                 }
                 .buttonStyle(.borderless)
-                .help("Đổi tên (gộp nếu trùng tên thẻ khác)")
+                .help("Rename (merges into an existing tag)")
                 Button {
                     pendingDelete = tag
                 } label: {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.borderless)
-                .help("Xóa thẻ")
+                .help("Delete tag")
             }
         }
         .padding(.vertical, 2)

@@ -5,6 +5,8 @@ import SwiftUI
 @main
 struct BNoteApp: App {
     init() {
+        // Before the store opens, so a failed migration still has a way back.
+        StoreBackup.run()
         Defaults.register()
         DocumentController.shared.canvasOptions = Defaults.canvasOptions
     }
@@ -31,43 +33,43 @@ struct BNoteCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Trang mới") { actions.newPage?() }
+            Button("New page") { actions.newPage?() }
                 .keyboardShortcut("n", modifiers: .command)
-            Button("Trang con mới") { actions.newSubpage?() }
+            Button("New subpage") { actions.newSubpage?() }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             Divider()
-            Button("Nhập tài liệu…") { actions.importDocuments?() }
+            Button("Import documents…") { actions.importDocuments?() }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
-            Menu("Xuất") {
+            Menu("Export") {
                 ForEach(DocumentFormat.allCases) { format in
                     Button(format.label) { actions.export?(format) }
                 }
             }
         }
 
-        CommandMenu("Trang") {
-            Button("Ảnh bìa: chọn ảnh…") { actions.setCoverFromFile?() }
-            Button("Ảnh bìa: dán từ clipboard") { actions.setCoverFromClipboard?() }
-            Button("Bỏ ảnh bìa") { actions.removeCover?() }
+        CommandMenu("Page") {
+            Button("Cover: choose picture…") { actions.setCoverFromFile?() }
+            Button("Cover: paste from clipboard") { actions.setCoverFromClipboard?() }
+            Button("Remove cover") { actions.removeCover?() }
             Divider()
-            Button("Thiết lập trang…") { actions.showPageSetup?() }
+            Button("Page setup…") { actions.showPageSetup?() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
         }
 
         // Replaces the stock Find submenu so ⌘F / ⌘G drive the in-page bar
         // whatever has focus.
         CommandGroup(replacing: .textEditing) {
-            Menu("Tìm") {
-                Button("Tìm trong trang…") { controller.showFind() }
+            Menu("Find") {
+                Button("Find in page…") { controller.showFind() }
                     .keyboardShortcut("f", modifiers: .command)
-                Button("Tìm và thay thế…") { controller.showFind(replace: true) }
+                Button("Find and Replace…") { controller.showFind(replace: true) }
                     .keyboardShortcut("f", modifiers: [.command, .option])
                 Divider()
-                Button("Kết quả sau") { controller.findNext() }
+                Button("Next match") { controller.findNext() }
                     .keyboardShortcut("g", modifiers: .command)
-                Button("Kết quả trước") { controller.findPrevious() }
+                Button("Previous match") { controller.findPrevious() }
                     .keyboardShortcut("g", modifiers: [.command, .shift])
-                Button("Dùng vùng chọn để tìm") { controller.useSelectionForFind() }
+                Button("Use Selection for Find") { controller.useSelectionForFind() }
                     .keyboardShortcut("e", modifiers: .command)
             }
         }
@@ -77,77 +79,77 @@ struct BNoteCommands: Commands {
                 .keyboardShortcut("p", modifiers: .command)
         }
 
-        CommandMenu("Định dạng") {
-            Button("Đậm") { controller.toggleTrait(.boldFontMask) }
+        CommandMenu("Format") {
+            Button("Bold") { controller.toggleTrait(.boldFontMask) }
                 .keyboardShortcut("b", modifiers: .command)
-            Button("Nghiêng") { controller.toggleTrait(.italicFontMask) }
+            Button("Italic") { controller.toggleTrait(.italicFontMask) }
                 .keyboardShortcut("i", modifiers: .command)
-            Button("Gạch chân") { controller.toggleUnderline() }
+            Button("Underline") { controller.toggleUnderline() }
                 .keyboardShortcut("u", modifiers: .command)
-            Button("Gạch ngang") { controller.toggleStrikethrough() }
+            Button("Strikethrough") { controller.toggleStrikethrough() }
             Divider()
 
-            Menu("Kiểu") {
+            Menu("Style") {
                 ForEach(TextStyle.allCases) { style in
                     styleButton(style)
                 }
             }
 
-            Menu("Canh lề") {
-                Button("Trái") { controller.setAlignment(.left) }
+            Menu("Alignment") {
+                Button("Left") { controller.setAlignment(.left) }
                     .keyboardShortcut("l", modifiers: [.command, .shift])
-                Button("Giữa") { controller.setAlignment(.center) }
+                Button("Center") { controller.setAlignment(.center) }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
-                Button("Phải") { controller.setAlignment(.right) }
+                Button("Right") { controller.setAlignment(.right) }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
-                Button("Đều hai bên") { controller.setAlignment(.justified) }
+                Button("Justified") { controller.setAlignment(.justified) }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
             }
 
-            Menu("Danh sách") {
-                Button("Danh sách chấm") { controller.toggleList(.bullet) }
+            Menu("Lists") {
+                Button("Bulleted list") { controller.toggleList(.bullet) }
                     .keyboardShortcut("8", modifiers: [.command, .shift])
-                Button("Danh sách số") { controller.toggleList(.numbered) }
+                Button("Numbered list") { controller.toggleList(.numbered) }
                     .keyboardShortcut("7", modifiers: [.command, .shift])
-                Button("Việc cần làm") { controller.toggleList(.todo) }
+                Button("To-do list") { controller.toggleList(.todo) }
                     .keyboardShortcut("9", modifiers: [.command, .shift])
             }
 
-            Menu("Chèn khối") {
+            Menu("Insert block") {
                 ForEach(SlashCatalog.all) { command in
                     Button(command.title) { command.perform(controller) }
                 }
             }
 
             Divider()
-            Button("Tăng thụt lề") { controller.changeIndent(by: EditorDefaults.tabIndent) }
+            Button("Increase indent") { controller.changeIndent(by: EditorDefaults.tabIndent) }
                 .keyboardShortcut("]", modifiers: .command)
-            Button("Giảm thụt lề") { controller.changeIndent(by: -EditorDefaults.tabIndent) }
+            Button("Decrease indent") { controller.changeIndent(by: -EditorDefaults.tabIndent) }
                 .keyboardShortcut("[", modifiers: .command)
-            Button("Tăng cỡ chữ") { controller.nudgeFontSize(by: 1) }
+            Button("Bigger") { controller.nudgeFontSize(by: 1) }
                 .keyboardShortcut(".", modifiers: [.command, .shift])
-            Button("Giảm cỡ chữ") { controller.nudgeFontSize(by: -1) }
+            Button("Smaller") { controller.nudgeFontSize(by: -1) }
                 .keyboardShortcut(",", modifiers: [.command, .shift])
             Divider()
-            Button("Xóa định dạng") { controller.clearFormatting() }
+            Button("Clear formatting") { controller.clearFormatting() }
                 .keyboardShortcut("\\", modifiers: .command)
         }
 
         CommandGroup(after: .sidebar) {
-            Toggle("Bảng bên phải", isOn: Binding(get: { ui.showInspector }, set: { _ in actions.toggleOutline?() }))
+            Toggle("Inspector", isOn: Binding(get: { ui.showInspector }, set: { _ in actions.toggleOutline?() }))
                 .keyboardShortcut("o", modifiers: [.command, .control])
-            Toggle("Chế độ tập trung", isOn: Binding(get: { ui.focusMode }, set: { _ in actions.toggleFocusMode?() }))
+            Toggle("Focus mode", isOn: Binding(get: { ui.focusMode }, set: { _ in actions.toggleFocusMode?() }))
                 .keyboardShortcut("f", modifiers: [.command, .control])
-            Button("Tổng quan") { actions.showDashboard?() }
+            Button("Overview") { actions.showDashboard?() }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
-            Button("Quản lý thẻ…") { actions.manageTags?() }
+            Button("Manage tags…") { actions.manageTags?() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()
-            Toggle("Lưới ô vuông", isOn: $controller.canvasOptions.showGrid)
+            Toggle("Grid", isOn: $controller.canvasOptions.showGrid)
                 .keyboardShortcut("g", modifiers: [.command, .control])
-            Toggle("Đường biên lề", isOn: $controller.canvasOptions.showMarginGuides)
-            Toggle("Trang giấy rời", isOn: Binding(get: { !controller.canvasOptions.continuous }, set: { controller.canvasOptions.continuous = !$0 }))
-            Toggle("Toàn chiều rộng", isOn: $controller.canvasOptions.fullWidth)
+            Toggle("Margin guides", isOn: $controller.canvasOptions.showMarginGuides)
+            Toggle("Paper pages", isOn: Binding(get: { !controller.canvasOptions.continuous }, set: { controller.canvasOptions.continuous = !$0 }))
+            Toggle("Full width", isOn: $controller.canvasOptions.fullWidth)
                 .keyboardShortcut("\\", modifiers: [.command, .shift])
         }
     }

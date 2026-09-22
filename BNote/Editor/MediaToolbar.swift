@@ -78,22 +78,22 @@ struct MediaToolbarView: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            sizeButton("S", 0.33, help: "Nhỏ — 1/3 chiều rộng")
-            sizeButton("M", 0.5, help: "Vừa — 1/2 chiều rộng")
-            sizeButton("L", 0.75, help: "Lớn — 3/4 chiều rộng")
-            sizeButton("↔", 1.0, help: "Rộng hết vùng chữ")
+            sizeButton("S", 0.33, help: "Small — 1/3 width")
+            sizeButton("M", 0.5, help: "Medium — 1/2 width")
+            sizeButton("L", 0.75, help: "Large — 3/4 width")
+            sizeButton("↔", 1.0, help: "Full column width")
             divider
             alignButton("text.alignleft", .left)
             alignButton("text.aligncenter", .center)
             alignButton("text.alignright", .right)
             divider
-            iconButton("doc.on.doc", help: "Sao chép ảnh") { model.onCopy?() }
-            iconButton("square.and.arrow.down", help: "Lưu ảnh…") { model.onSave?() }
+            iconButton("doc.on.doc", help: "Copy picture") { model.onCopy?() }
+            iconButton("square.and.arrow.down", help: "Save picture…") { model.onSave?() }
             if model.hasLink {
-                iconButton(model.isVideo ? "play.rectangle" : "arrow.up.right.square", help: model.isVideo ? "Phát video" : "Mở liên kết") { model.onOpen?() }
+                iconButton(model.isVideo ? "play.rectangle" : "arrow.up.right.square", help: model.isVideo ? "Play video" : "Open link") { model.onOpen?() }
             }
             divider
-            iconButton("trash", help: "Xóa") { model.onDelete?() }
+            iconButton("trash", help: "Delete") { model.onDelete?() }
         }
         .padding(.horizontal, 6)
         .frame(height: 34)

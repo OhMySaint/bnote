@@ -8,13 +8,13 @@ enum TextStyle: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .title: "Tiêu đề lớn"
-        case .heading1: "Đầu mục 1"
-        case .heading2: "Đầu mục 2"
-        case .heading3: "Đầu mục 3"
-        case .body: "Văn bản"
-        case .caption: "Chú thích"
-        case .code: "Mã"
+        case .title: "Title"
+        case .heading1: "Heading 1"
+        case .heading2: "Heading 2"
+        case .heading3: "Heading 3"
+        case .body: "Text"
+        case .caption: "Callout"
+        case .code: "Code"
         }
     }
 

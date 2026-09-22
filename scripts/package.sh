@@ -51,7 +51,7 @@ xcodebuild -project BNote.xcodeproj -scheme BNote -configuration Release \
 cp -R "$BUILD_DIR/Build/Products/Release/$APP_NAME.app" "$STAGING/"
 codesign --verify --deep --strict "$STAGING/$APP_NAME.app"
 ln -s /Applications "$STAGING/Applications"
-cp "scripts/ĐỌC TRƯỚC.txt" "$STAGING/"
+cp "scripts/READ ME FIRST.txt" "$STAGING/"
 
 hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG" >/dev/null
 echo "→ $DMG  ($BUNDLE_ID)"

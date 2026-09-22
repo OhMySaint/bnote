@@ -21,9 +21,9 @@ struct DashboardView: View {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .updated: "Sửa gần đây"
-            case .created: "Mới tạo"
-            case .title: "Tên A–Z"
+            case .updated: "Recently edited"
+            case .created: "Recently created"
+            case .title: "Title A–Z"
             }
         }
     }
@@ -72,12 +72,12 @@ struct DashboardView: View {
             Divider()
             if visible.isEmpty {
                 ContentUnavailableView {
-                    Label(notes.isEmpty ? "Chưa có trang" : "Không có trang phù hợp", systemImage: "square.grid.2x2")
+                    Label(notes.isEmpty ? "No pages yet" : "No matching pages", systemImage: "square.grid.2x2")
                 } description: {
-                    Text(notes.isEmpty ? "Tạo trang đầu tiên để bắt đầu." : "Thử đổi từ khóa hoặc bỏ lọc thẻ.")
+                    Text(notes.isEmpty ? "Create your first page to get started." : "Try another search, or clear the tag filter.")
                 } actions: {
                     if notes.isEmpty {
-                        Button("Trang mới") { actions.add(nil) }
+                        Button("New page") { actions.add(nil) }
                             .buttonStyle(.borderedProminent)
                     }
                 }
@@ -119,7 +119,7 @@ struct DashboardView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Tổng quan")
+                Text("Overview")
                     .font(.largeTitle.weight(.bold))
                 if AppFlavor.isDev {
                     // Two copies can run side by side; this says which one.
@@ -134,22 +134,22 @@ struct DashboardView: View {
                 Button {
                     actions.add(nil)
                 } label: {
-                    Label("Trang mới", systemImage: "plus")
+                    Label("New page", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
 
             HStack(spacing: 18) {
                 stat("\(notes.count)", "trang")
-                stat("\(notes.filter { $0.parent == nil }.count)", "trang gốc")
-                stat("\(totalWords)", "từ")
-                stat("\(usedTags.count)", "thẻ")
+                stat("\(notes.filter { $0.parent == nil }.count)", "top level")
+                stat("\(totalWords)", "words")
+                stat("\(usedTags.count)", "tags")
             }
 
             HStack(spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Tìm trang…", text: $query)
+                    TextField("Search pages…", text: $query)
                         .textFieldStyle(.plain)
                 }
                 .padding(.horizontal, 8)
@@ -163,7 +163,7 @@ struct DashboardView: View {
                 .labelsHidden()
                 .fixedSize()
 
-                Toggle("Chỉ mục lớn", isOn: $onlyRoots)
+                Toggle("Top level only", isOn: $onlyRoots)
                     .toggleStyle(.checkbox)
 
                 Spacer()
@@ -179,7 +179,7 @@ struct DashboardView: View {
             if !usedTags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        filterChip("Tất cả", selected: tagFilter == nil) { tagFilter = nil }
+                        filterChip("All", selected: tagFilter == nil) { tagFilter = nil }
                         ForEach(usedTags, id: \.self) { tag in
                             let selected = tagFilter.map { Tag.key(for: $0) == Tag.key(for: tag) } ?? false
                             filterChip(tag, color: tags.color(for: tag), selected: selected) {
@@ -187,7 +187,7 @@ struct DashboardView: View {
                             }
                         }
                         Button(action: onManageTags) {
-                            Label("Quản lý thẻ", systemImage: "slider.horizontal.3")
+                            Label("Manage tags", systemImage: "slider.horizontal.3")
                                 .font(.caption)
                         }
                         .buttonStyle(.borderless)
@@ -252,7 +252,7 @@ private struct PageCard: View {
                 Text(note.displayTitle)
                     .font(.headline)
                     .lineLimit(1)
-                Text(note.snippet.isEmpty ? "Trang trống" : note.snippet)
+                Text(note.snippet.isEmpty ? "Blank page" : note.snippet)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -300,7 +300,7 @@ private struct PageListRow: View {
                     }
                     Text(note.displayTitle).font(.body.weight(.medium))
                 }
-                Text(note.snippet.isEmpty ? "Trang trống" : note.snippet)
+                Text(note.snippet.isEmpty ? "Blank page" : note.snippet)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

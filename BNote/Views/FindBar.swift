@@ -26,43 +26,43 @@ struct FindBar: View {
                 }
                 .toggleStyle(.button)
                 .controlSize(.small)
-                .help("Phân biệt hoa thường")
+                .help("Match case")
 
                 HStack(spacing: 0) {
                     Button { controller.findPrevious() } label: { Image(systemName: "chevron.up") }
-                        .help("Kết quả trước (⇧⌘G)")
+                        .help("Previous match (⇧⌘G)")
                     Button { controller.findNext() } label: { Image(systemName: "chevron.down") }
-                        .help("Kết quả sau (⌘G)")
+                        .help("Next match (⌘G)")
                 }
                 .controlSize(.small)
                 .disabled(!model.hasMatches)
 
                 Toggle(isOn: $model.showReplace) {
-                    Text("Thay thế")
+                    Text("Replace")
                 }
                 .toggleStyle(.button)
                 .controlSize(.small)
-                .help("Hiện ô thay thế (⌥⌘F)")
+                .help("Show the replace field (⌥⌘F)")
 
                 Spacer()
 
-                Button("Xong") { controller.hideFind() }
+                Button("Done") { controller.hideFind() }
                     .controlSize(.small)
                     .keyboardShortcut(.cancelAction)
             }
 
             if model.showReplace {
                 HStack(spacing: 8) {
-                    TextField("Thay bằng", text: $model.replacement)
+                    TextField("Replace with", text: $model.replacement)
                         .textFieldStyle(.roundedBorder)
                         .controlSize(.small)
                         .frame(maxWidth: 320)
                         .focused($focused, equals: .replacement)
                         .onSubmit { controller.replaceCurrentMatch() }
-                    Button("Thay") { controller.replaceCurrentMatch() }
+                    Button("Replace") { controller.replaceCurrentMatch() }
                         .controlSize(.small)
                         .disabled(!model.hasMatches)
-                    Button("Thay tất cả") { controller.replaceAllMatches() }
+                    Button("Replace all") { controller.replaceAllMatches() }
                         .controlSize(.small)
                         .disabled(!model.hasMatches)
                     Spacer()
@@ -89,7 +89,7 @@ struct FindBar: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
                 .font(.caption)
-            TextField("Tìm trong trang", text: $model.query)
+            TextField("Find in page", text: $model.query)
                 .textFieldStyle(.plain)
                 .focused($focused, equals: .query)
                 .onSubmit { controller.findNext() }

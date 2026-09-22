@@ -58,9 +58,9 @@ struct NoteEditorView: View {
                 Button {
                     showInspector.toggle()
                 } label: {
-                    Label("Bảng điều khiển", systemImage: "sidebar.right")
+                    Label("Inspector", systemImage: "sidebar.right")
                 }
-                .help("Ẩn/hiện bảng bên phải (⌃⌘O)")
+                .help("Show or hide the inspector (⌃⌘O)")
             }
         }
     }
@@ -72,15 +72,15 @@ struct NoteEditorView: View {
             saveIndicator
             Divider().frame(height: 12)
             Text(controller.canvasOptions.continuous
-                ? "\(controller.wordCount) từ · \(controller.characterCount) ký tự"
-                : "\(controller.pageCount) trang · \(controller.wordCount) từ · \(controller.characterCount) ký tự")
+                ? "\(controller.wordCount) words · \(controller.characterCount) characters"
+                : "\(controller.pageCount) pages · \(controller.wordCount) words · \(controller.characterCount) characters")
                 .monospacedDigit()
             Divider().frame(height: 12)
-            Text("\(controller.config.paper.label) \(controller.config.orientation.label.lowercased()) · lề \(Unit.format(controller.config.margins.left))")
+            Text("\(controller.config.paper.label) \(controller.config.orientation.label.lowercased()) · \(Unit.format(controller.config.margins.left)) margins")
 
             Spacer()
 
-            Text("Gõ / để chèn khối")
+            Text("Press / to insert a block")
                 .foregroundStyle(.tertiary)
 
             Divider().frame(height: 12)
@@ -98,7 +98,7 @@ struct NoteEditorView: View {
             Image(systemName: controller.hasUnsavedChanges ? "circle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 8))
                 .foregroundStyle(controller.hasUnsavedChanges ? Color.orange : Color.green)
-            Text(controller.hasUnsavedChanges ? "Đang lưu…" : "Đã lưu \(note.updatedAt.formatted(date: .omitted, time: .shortened))")
+            Text(controller.hasUnsavedChanges ? "Saving…" : "Saved \(note.updatedAt.formatted(date: .omitted, time: .shortened))")
         }
         .animation(.easeInOut(duration: 0.2), value: controller.hasUnsavedChanges)
     }
@@ -106,9 +106,9 @@ struct NoteEditorView: View {
     /// Notion's page option "Full width", as a switch.
     private var layoutToggles: some View {
         Toggle(isOn: $controller.canvasOptions.fullWidth) {
-            Label("Toàn chiều rộng", systemImage: "arrow.left.and.right")
+            Label("Full width", systemImage: "arrow.left.and.right")
         }
-        .help("Toàn chiều rộng: cột chữ giãn sát hai mép (⇧⌘\\)")
+        .help("Full width: the text column stretches to both edges (⇧⌘\\)")
         .toggleStyle(.switch)
         .controlSize(.mini)
         .disabled(!controller.canvasOptions.continuous)

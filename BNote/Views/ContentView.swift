@@ -57,9 +57,9 @@ struct ContentView: View {
                     Button {
                         addPage(parent: nil)
                     } label: {
-                        Label("Trang mới", systemImage: "square.and.pencil")
+                        Label("New page", systemImage: "square.and.pencil")
                     }
-                    .help("Trang mới (⌘N)")
+                    .help("New page (⌘N)")
                 }
             }
         } detail: {
@@ -80,7 +80,7 @@ struct ContentView: View {
                 )
             }
         }
-        .navigationTitle(selectedNote?.displayTitle ?? "Tổng quan")
+        .navigationTitle(selectedNote?.displayTitle ?? "Overview")
         .onChange(of: selection) { _, _ in activate(selectedNote) }
         .onChange(of: controller.config) { _, config in
             selectedNote?.pageConfig = config
@@ -92,18 +92,18 @@ struct ContentView: View {
         .onAppear(perform: wireCommands)
         .sheet(isPresented: $showTagManager) { TagManagerView() }
         .confirmationDialog(
-            "Xóa “\(pendingDeletion?.displayTitle ?? "")”?",
+            "Delete “\(pendingDeletion?.displayTitle ?? "")”?",
             isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } })
         ) {
-            Button("Xóa trang và trang con", role: .destructive) {
+            Button("Delete page and subpages", role: .destructive) {
                 if let note = pendingDeletion { delete(note) }
                 pendingDeletion = nil
             }
-            Button("Hủy", role: .cancel) { pendingDeletion = nil }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
         } message: {
-            Text("Mọi trang con bên trong cũng bị xóa.")
+            Text("Every subpage inside is deleted as well.")
         }
-        .alert("Không thực hiện được", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+        .alert("Something went wrong", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
@@ -180,7 +180,7 @@ struct ContentView: View {
     }
 
     private func duplicate(_ note: Note) {
-        let copy = Note(title: note.title + " (bản sao)", parent: note.parent, sortIndex: note.sortIndex + 1)
+        let copy = Note(title: note.title + " (copy)", parent: note.parent, sortIndex: note.sortIndex + 1)
         copy.content = note.content
         copy.rtfData = note.rtfData
         copy.tags = note.tags

@@ -600,7 +600,7 @@ final class DocumentController: NSObject, ObservableObject {
 
         // An empty line has no characters to carry the style, and even on a
         // populated line the caret's typing attributes must match, so whatever
-        // is typed next picks the style up (choose "/Đầu mục 1", then type).
+        // is typed next picks the style up (choose "/Heading 1", then type).
         if selection.length == 0 || populated.isEmpty, let textView = activeTextView {
             var typing = textView.typingAttributes
             if typing.isEmpty { typing = EditorDefaults.bodyAttributes }
@@ -960,7 +960,7 @@ final class DocumentController: NSObject, ObservableObject {
         else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "Ảnh.png"
+        panel.nameFieldStringValue = "Picture.png"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? png.write(to: url)
     }
@@ -1382,17 +1382,17 @@ extension DocumentController {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
-        panel.prompt = "Chèn"
+        panel.prompt = "Insert"
         guard panel.runModal() == .OK, let url = panel.url, let image = NSImage(contentsOf: url) else { return }
         insertImage(image)
     }
 
     func insertLinkFromPanel() {
         let alert = NSAlert()
-        alert.messageText = "Chèn liên kết"
-        alert.informativeText = "Nhập địa chỉ cho phần văn bản đang chọn."
-        alert.addButton(withTitle: "Chèn")
-        alert.addButton(withTitle: "Hủy")
+        alert.messageText = "Insert link"
+        alert.informativeText = "Enter a URL for the selected text."
+        alert.addButton(withTitle: "Insert")
+        alert.addButton(withTitle: "Cancel")
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
         field.placeholderString = "https://"
         alert.accessoryView = field
@@ -1983,20 +1983,20 @@ extension DocumentController: NSTextViewDelegate {
         textView.typingAttributes = EditorDefaults.bodyAttributes
     }
 
-    /// "/Trang con": make a child page and drop a link to it here.
+    /// "/Subpage": make a child page and drop a link to it here.
     func createLinkedSubpage() {
         let alert = NSAlert()
-        alert.messageText = "Trang con mới"
-        alert.informativeText = "Tên trang con; một liên kết tới nó sẽ được chèn tại vị trí con trỏ."
-        alert.addButton(withTitle: "Tạo")
-        alert.addButton(withTitle: "Hủy")
+        alert.messageText = "New subpage"
+        alert.informativeText = "Name of the subpage; a link to it is inserted at the caret."
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-        field.placeholderString = "Ví dụ: Chương 1"
+        field.placeholderString = "For example: Chapter 1"
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let title = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let made = AppActions.shared.createLinkedSubpage?(title.isEmpty ? "Trang không tên" : title) else { return }
+        guard let made = AppActions.shared.createLinkedSubpage?(title.isEmpty ? "Untitled" : title) else { return }
         insertPageLink(title: made.title, url: made.url)
     }
 }

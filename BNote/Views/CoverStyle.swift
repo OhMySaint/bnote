@@ -9,12 +9,12 @@ enum CoverStyle: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .sunrise: "Bình minh"
-        case .ocean: "Đại dương"
-        case .forest: "Rừng"
-        case .berry: "Mọng"
-        case .dusk: "Hoàng hôn"
-        case .slate: "Đá"
+        case .sunrise: "Sunrise"
+        case .ocean: "Ocean"
+        case .forest: "Forest"
+        case .berry: "Berry"
+        case .dusk: "Sunset"
+        case .slate: "Stone"
         }
     }
 

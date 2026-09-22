@@ -1,0 +1,21 @@
+BNote 0.2.0 — preview build
+
+INSTALL
+1. Drag BNote into the Applications folder.
+2. First launch: RIGHT-CLICK BNote -> "Open" -> click "Open" again.
+   (The preview is signed but not notarised by Apple, so macOS warns once.)
+   Still blocked? Open Terminal and run:
+   xattr -dr com.apple.quarantine /Applications/BNote.app
+
+REQUIRES: macOS 15 or later.
+
+YOUR PAGES stay on this Mac, in
+~/Library/Containers/com.hoangson.BNote/
+Installing a newer BNote over the old one never touches them, and the app
+keeps the last 5 store snapshots in that folder under "Backups".
+
+HANDY SHORTCUTS
+⌘N new page · ⇧⌘N new subpage · type / in a page to insert a block
+⌘F find in page · ⌥⌘F find and replace · ⌘G / ⇧⌘G next / previous match
+⇧⌘H overview · ⌃⌘F focus mode · ⌃⌘O inspector · ⇧⌘\ full width
+⇧⌘P page setup · ⇧⌘T manage tags · ⇧⌘I import · File ▸ Export

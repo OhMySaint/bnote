@@ -36,8 +36,8 @@ enum InspectorTab: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .outline: "Mục lục"
-        case .page: "Trang"
+        case .outline: "Outline"
+        case .page: "Page"
         }
     }
 }
@@ -55,12 +55,12 @@ struct PageSetupPanel: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let note {
-                    section("Ảnh bìa") {
+                    section("Cover") {
                         CoverControls(note: note)
                     }
                 }
 
-                section("Khổ giấy") {
+                section("Paper size") {
                     Picker("", selection: paperBinding) {
                         ForEach(Paper.allCases) { paper in
                             Text(paper.label).tag(paper)
@@ -72,7 +72,7 @@ struct PageSetupPanel: View {
                         .foregroundStyle(.secondary)
                 }
 
-                section("Hướng giấy") {
+                section("Orientation") {
                     Picker("", selection: orientationBinding) {
                         ForEach(PageOrientation.allCases) { orientation in
                             Text(orientation.label).tag(orientation)
@@ -82,43 +82,43 @@ struct PageSetupPanel: View {
                     .labelsHidden()
                 }
 
-                section("Lề (\(unit.label))") {
+                section("Margins (\(unit.label))") {
                     presetCards
                     marginSlider("Ngang", value: horizontalMargin, symbol: "arrow.left.and.right")
-                    marginSlider("Dọc", value: verticalMargin, symbol: "arrow.up.and.down")
-                    DisclosureGroup("Tùy chỉnh từng cạnh", isExpanded: $showCustomMargins) {
+                    marginSlider("Portrait", value: verticalMargin, symbol: "arrow.up.and.down")
+                    DisclosureGroup("Custom per edge", isExpanded: $showCustomMargins) {
                         Grid(horizontalSpacing: 8, verticalSpacing: 6) {
                             GridRow {
-                                marginField("Trên", \.top)
-                                marginField("Dưới", \.bottom)
+                                marginField("Top", \.top)
+                                marginField("Bottom", \.bottom)
                             }
                             GridRow {
-                                marginField("Trái", \.left)
-                                marginField("Phải", \.right)
+                                marginField("Left", \.left)
+                                marginField("Right", \.right)
                             }
                         }
                         .padding(.top, 4)
                     }
                     .font(.caption)
-                    Text("Mặc định cho trang mới đặt trong Cài đặt (⌘,). Bật thước hoặc đường biên lề để kéo trực tiếp.")
+                    Text("Defaults for new pages live in Settings (⌘,). Turn on margin guides to drag them on the page.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                section("Hiển thị") {
-                    Toggle("Trang giấy rời (bóng, khe giữa trang)", isOn: Binding(
+                section("Display") {
+                    Toggle("Paper pages (shadow, gap between sheets)", isOn: Binding(
                         get: { !controller.canvasOptions.continuous },
                         set: { controller.canvasOptions.continuous = !$0 }
                     ))
-                    Toggle("Lưới ô vuông", isOn: optionBinding(\.showGrid))
-                    Toggle("Đường biên lề", isOn: optionBinding(\.showMarginGuides))
+                    Toggle("Grid", isOn: optionBinding(\.showGrid))
+                    Toggle("Margin guides", isOn: optionBinding(\.showMarginGuides))
                 }
 
-                section("Bố cục trang này") {
-                    Toggle("Toàn chiều rộng", isOn: optionBinding(\.fullWidth))
+                section("This page") {
+                    Toggle("Full width", isOn: optionBinding(\.fullWidth))
                         .disabled(!controller.canvasOptions.continuous)
-                    Text("Cột đọc canh giữa với mép 7,5 % cửa sổ; toàn chiều rộng giãn sát hai mép. Lưu riêng cho từng trang.")
+                    Text("The reading column is centred with 7.5% gutters; full width stretches to both edges. Saved per page.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -175,7 +175,7 @@ struct PageSetupPanel: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 54, alignment: .trailing)
         }
-        .help("Lề \(label.lowercased())")
+        .help("\(label) margin")
     }
 
     /// Left and right together.

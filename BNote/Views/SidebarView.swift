@@ -32,13 +32,13 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             List(selection: $selection) {
                 Section {
-                    Label("Tổng quan", systemImage: "square.grid.2x2")
+                    Label("Overview", systemImage: "square.grid.2x2")
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                         .onTapGesture { onShowDashboard() }
                 }
 
-                Section("Trang") {
+                Section("Pages") {
                     ForEach(roots) { note in
                         PageRow(
                             note: note,
@@ -73,13 +73,13 @@ struct SidebarView: View {
                         }
                     } header: {
                         HStack {
-                            Text("Thẻ")
+                            Text("Tags")
                             Spacer()
                             Button(action: onManageTags) {
                                 Image(systemName: "slider.horizontal.3")
                             }
                             .buttonStyle(.plain)
-                            .help("Quản lý thẻ (⇧⌘T)")
+                            .help("Manage tags (⇧⌘T)")
                         }
                     }
                 }
@@ -88,11 +88,11 @@ struct SidebarView: View {
                 if roots.isEmpty {
                     if search.isEmpty && activeTag == nil {
                         ContentUnavailableView {
-                            Label("Chưa có trang", systemImage: "doc.text")
+                            Label("No pages yet", systemImage: "doc.text")
                         } description: {
-                            Text("Mỗi trang là một tài liệu, có thể lồng trang con bên trong.")
+                            Text("Every page is a document and can hold subpages.")
                         } actions: {
-                            Button("Tạo trang đầu tiên") { actions.add(nil) }
+                            Button("Create your first page") { actions.add(nil) }
                                 .buttonStyle(.borderedProminent)
                         }
                     } else {
@@ -104,7 +104,7 @@ struct SidebarView: View {
             Divider()
             footer
         }
-        .searchable(text: $search, placement: .sidebar, prompt: "Tìm trong mọi trang")
+        .searchable(text: $search, placement: .sidebar, prompt: "Search all pages")
         .navigationSplitViewColumnWidth(min: 220, ideal: 260)
     }
 
@@ -113,11 +113,11 @@ struct SidebarView: View {
             Button {
                 actions.add(nil)
             } label: {
-                Label("Trang mới", systemImage: "plus")
+                Label("New page", systemImage: "plus")
                     .font(.callout)
             }
             .buttonStyle(.borderless)
-            .help("Trang mới (⌘N)")
+            .help("New page (⌘N)")
             Spacer()
             Text("\(allNotes.count) trang")
                 .font(.caption)
@@ -145,11 +145,11 @@ struct PageContextMenu: View {
     }
 
     var body: some View {
-        Button("Đổi tên") { actions.rename(note) }
-        Button("Thêm trang con") { actions.add(note) }
-        Button("Nhân bản") { actions.duplicate(note) }
+        Button("Rename") { actions.rename(note) }
+        Button("Add subpage") { actions.add(note) }
+        Button("Duplicate") { actions.duplicate(note) }
 
-        Menu("Biểu tượng") {
+        Menu("Icon") {
             ForEach(Self.icons, id: \.self) { icon in
                 Button(icon) {
                     note.icon = icon
@@ -158,8 +158,8 @@ struct PageContextMenu: View {
             }
         }
 
-        Menu("Di chuyển tới") {
-            Button("Cấp gốc") { actions.move(note, nil) }
+        Menu("Move to") {
+            Button("Top level") { actions.move(note, nil) }
                 .disabled(note.parent == nil)
             Divider()
             ForEach(moveTargets) { target in
@@ -173,7 +173,7 @@ struct PageContextMenu: View {
         }
 
         Divider()
-        Button("Xóa", role: .destructive) { actions.delete(note) }
+        Button("Delete", role: .destructive) { actions.delete(note) }
     }
 }
 
@@ -225,7 +225,7 @@ private struct PageRow: View {
         if isRenaming {
             HStack(spacing: 7) {
                 Text(note.icon)
-                TextField("Tên trang", text: $draft)
+                TextField("Page title", text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .focused($renameFocused)
                     .onSubmit(commitRename)
@@ -262,7 +262,7 @@ private struct PageRow: View {
                             .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 4))
                     }
                     .buttonStyle(.plain)
-                    .help("Thêm trang con")
+                    .help("Add subpage")
                 }
             }
             .padding(.vertical, 1)

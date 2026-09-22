@@ -14,11 +14,11 @@ struct CoverControls: View {
                     .frame(height: 64)
             }
             HStack(spacing: 6) {
-                Button("Chọn ảnh…") { pickFile() }
-                Button("Dán") { paste() }
-                    .help("Dán ảnh đang có trong clipboard")
+                Button("Choose picture…") { pickFile() }
+                Button("Paste") { paste() }
+                    .help("Paste the picture on the clipboard")
                 if note.hasCover {
-                    Button("Bỏ") { remove() }
+                    Button("Remove") { remove() }
                 }
             }
             .controlSize(.small)
@@ -39,9 +39,9 @@ struct CoverControls: View {
                 }
             }
             if note.hasCover {
-                Picker("Chiều cao", selection: $note.coverHeight) {
-                    Text("Thấp").tag(140.0)
-                    Text("Vừa").tag(200.0)
+                Picker("Height", selection: $note.coverHeight) {
+                    Text("Short").tag(140.0)
+                    Text("Medium").tag(200.0)
                     Text("Cao").tag(280.0)
                 }
                 .pickerStyle(.segmented)
@@ -54,7 +54,7 @@ struct CoverControls: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
-        panel.prompt = "Đặt làm ảnh bìa"
+        panel.prompt = "Set as cover"
         guard panel.runModal() == .OK, let url = panel.url, let image = NSImage(contentsOf: url) else { return }
         apply(image, to: note)
     }

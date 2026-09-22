@@ -38,16 +38,16 @@ final class PageTextView: NSTextView {
 
         var extras: [NSMenuItem] = []
         if textStorage?.attribute(.attachment, at: index, effectiveRange: nil) is NSTextAttachment {
-            let copy = NSMenuItem(title: "Sao chép ảnh", action: #selector(copyImageAction(_:)), keyEquivalent: "")
+            let copy = NSMenuItem(title: "Copy picture", action: #selector(copyImageAction(_:)), keyEquivalent: "")
             copy.representedObject = index
-            let save = NSMenuItem(title: "Lưu ảnh…", action: #selector(saveImageAction(_:)), keyEquivalent: "")
+            let save = NSMenuItem(title: "Save picture…", action: #selector(saveImageAction(_:)), keyEquivalent: "")
             save.representedObject = index
             extras += [copy, save]
         }
         if let url = controller.link(at: index) {
-            let open = NSMenuItem(title: "Mở liên kết trong app", action: #selector(openLinkAction(_:)), keyEquivalent: "")
+            let open = NSMenuItem(title: "Open link in BNote", action: #selector(openLinkAction(_:)), keyEquivalent: "")
             open.representedObject = url
-            let browser = NSMenuItem(title: "Mở bằng trình duyệt", action: #selector(openInBrowserAction(_:)), keyEquivalent: "")
+            let browser = NSMenuItem(title: "Open in browser", action: #selector(openInBrowserAction(_:)), keyEquivalent: "")
             browser.representedObject = url
             extras += [open, browser]
         }
@@ -536,7 +536,7 @@ final class PagedDocumentView: NSView {
         textView.isContinuousSpellCheckingEnabled = false
         textView.delegate = controller
         textView.typingAttributes = EditorDefaults.bodyAttributes
-        textView.placeholder = "Bắt đầu viết, hoặc gõ / để chèn khối…"
+        textView.placeholder = "Start writing, or press / to insert a block…"
         return textView
     }
 

@@ -8,7 +8,7 @@ struct OutlinePanel: View {
         VStack(alignment: .leading, spacing: 0) {
             if controller.outline.isEmpty {
                 Spacer(minLength: 12)
-                Text("Dùng kiểu Đầu mục 1–3 để tạo mục lục.")
+                Text("Use Heading 1–3 to build an outline.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 14)

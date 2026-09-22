@@ -41,7 +41,7 @@ enum PageOrientation: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .portrait: "Dọc"
+        case .portrait: "Portrait"
         case .landscape: "Ngang"
         }
     }
@@ -183,10 +183,10 @@ struct MarginPreset: Identifiable {
     var id: String { label }
 
     static let all: [MarginPreset] = [
-        .init(shortLabel: "Hẹp", label: "Hẹp — lề 0,5 in", margins: PageMargins(uniform: 36)),
-        .init(shortLabel: "Thường", label: "Thường — lề 0,75 in", margins: PageMargins(uniform: 54)),
-        .init(shortLabel: "Thoáng", label: "Thoáng — lề 1 in", margins: PageMargins(uniform: 72)),
-        .init(shortLabel: "Đóng gáy", label: "Đóng gáy — lề trái 1,25 in", margins: PageMargins(top: 54, bottom: 54, left: 90, right: 54)),
+        .init(shortLabel: "Narrow", label: "Narrow — 0.5 in margins", margins: PageMargins(uniform: 36)),
+        .init(shortLabel: "Normal", label: "Normal — 0.75 in margins", margins: PageMargins(uniform: 54)),
+        .init(shortLabel: "Wide", label: "Wide — 1 in margins", margins: PageMargins(uniform: 72)),
+        .init(shortLabel: "Bound", label: "Bound — 1.25 in left margin", margins: PageMargins(top: 54, bottom: 54, left: 90, right: 54)),
     ]
 }
 

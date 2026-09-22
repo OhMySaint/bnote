@@ -133,7 +133,7 @@ shoot("bnote-find.png")
 check("thanh tìm: 2 kết quả", controller.find.matches.count == 2, "got \(controller.find.matches.count)")
 func findTextField() -> NSTextField? {
     func find(_ v: NSView) -> NSTextField? {
-        if let f = v as? NSTextField, f.placeholderString == "Tìm trong trang" { return f }
+        if let f = v as? NSTextField, f.placeholderString == "Find in page" { return f }
         for sub in v.subviews { if let f = find(sub) { return f } }
         return nil
     }
