@@ -81,6 +81,10 @@ struct DashboardView: View {
                             .buttonStyle(.borderedProminent)
                     }
                 }
+                // Without this the empty state keeps its natural height, the
+                // whole screen shrinks, and the split view centres it — which
+                // reads as a huge blank band above the title.
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     switch layout {
@@ -109,6 +113,7 @@ struct DashboardView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var header: some View {
@@ -116,6 +121,15 @@ struct DashboardView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Tổng quan")
                     .font(.largeTitle.weight(.bold))
+                if AppFlavor.isDev {
+                    // Two copies can run side by side; this says which one.
+                    Text("DEV \(AppFlavor.version)")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Color.orange, in: .capsule)
+                }
                 Spacer()
                 Button {
                     actions.add(nil)

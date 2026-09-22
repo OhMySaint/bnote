@@ -1,13 +1,21 @@
 # BNote — tài liệu bàn giao (đọc trước khi tiếp tục ở chat mới)
 
-Cập nhật: 2026-09-21. Người dùng: Hoàng Sơn (GitHub **OhMySaint**, gõ tiếng Việt bằng **OpenKey**).
+Cập nhật: 2026-09-22. Người dùng: Hoàng Sơn (GitHub **OhMySaint**, gõ tiếng Việt bằng **OpenKey**).
 
 ## 1. Dự án là gì, đang ở đâu
 
 - **BNote**: app ghi chú/soạn thảo macOS native (SwiftUI + AppKit + SwiftData), phong cách **Notion** (cây trang, `/` chèn khối, bìa, thẻ) nhưng có lõi văn bản kiểu Google Docs (định dạng đầy đủ, xuất PDF/DOCX/RTF/HTML/MD, có chế độ phân trang theo khổ giấy).
 - Mã nguồn: `~/bnote`, repo công khai https://github.com/OhMySaint/bnote (main, push bằng `gh` đã đăng nhập).
 - Bản cho người khác dùng thử: `scripts/package.sh` → `dist/BNote-0.2.0.dmg` (ký Apple Development, chưa notarize → người nhận chuột phải ▸ Open). Release đã đăng: https://github.com/OhMySaint/bnote/releases/tag/v0.2.0 (tải file mới lên bằng `gh release upload v0.2.0 dist/*.dmg --clobber` hoặc tạo tag mới).
-- Bản user dùng hằng ngày: `/Applications/BNote.app` (copy từ `dist/staging/` sau mỗi lần package: `rm -rf /Applications/BNote.app && ditto dist/staging/BNote.app /Applications/BNote.app`).
+- **Hai phiên bản song song, dữ liệu tách hẳn** (từ 2026-09-22):
+  | | Bản ổn định | Bản thử nghiệm |
+  | --- | --- | --- |
+  | App | `/Applications/BNote.app` | `/Applications/BNote Dev.app` |
+  | Bundle id | `com.hoangson.BNote` | `com.hoangson.BNote.dev` |
+  | Store | `~/Library/Containers/com.hoangson.BNote/…` | `~/Library/Containers/com.hoangson.BNote.dev/…` |
+  | Dấu hiệu nhận biết | — | nhãn cam **DEV 0.2.0** ở trang Tổng quan, tên cửa sổ "BNote Dev" |
+  | Build | `scripts/package.sh stable --install` | `scripts/package.sh dev --install` |
+  Khác bundle id → macOS cấp container riêng nên trang/cài đặt không đụng nhau. **Sửa bug thì cài vào bản Dev; chỉ đụng bản ổn định khi user yêu cầu** (họ dùng nó hằng ngày). Chép dữ liệu qua lại để thử: `scripts/copy-data.sh stable dev` (tự sao lưu store đích, phải thoát cả hai app).
 - Dữ liệu: `~/Library/Containers/com.hoangson.BNote/Data/Library/Application Support/default.store` (SwiftData). Có 2 trang test tôi sinh: "[Test] Luận văn 35 trang" và cây "[Test] Screenplay — The Last Train" (1 gốc + 3 hồi + 26 cảnh).
 
 ## 2. Kiến trúc (file quan trọng)
@@ -28,6 +36,7 @@ Cập nhật: 2026-09-21. Người dùng: Hoàng Sơn (GitHub **OhMySaint**, gõ
 | `Views/NoteEditorView.swift` | Toolbar + thanh tìm + editor + inspector + thanh trạng thái; overlay đầu trang dịch theo cuộn |
 | `Views/DashboardView.swift`, `SidebarView.swift`, `TagViews.swift`, `PageInspector.swift`, `SettingsView.swift`, `FormatToolbar.swift`, `ColorPalette.swift`, `CoverControls.swift`, `CoverStyle.swift` | UI |
 | `Models/Note.swift`, `Tag.swift`, `PageConfig.swift` | SwiftData + `Defaults` (UserDefaults) + đơn vị đo |
+| `AppFlavor.swift` | Biết đang chạy bản nào (`isDev`, `name`, `version`) — đọc từ Info.plist, dùng cho tên cửa sổ và nhãn DEV |
 
 Luồng lưu: gõ → `textDidChange` → `documentDidChangeFromTyping` (nhẹ) → 30 ms sau: phân trang/đánh số/mục lục/đếm → `onSave` (debounce 0,4 s) ghi `note.rtfData` (archive) + `note.content` (plain).
 
@@ -45,14 +54,17 @@ Luồng lưu: gõ → `textDidChange` → `documentDidChangeFromTyping` (nhẹ) 
 10. Đơn vị: mặc định **inch**, lề 0,75 in; thước kẻ đã gỡ hẳn; đường biên lề/lưới chỉ ở chế độ giấy rời.
 11. Hiệu năng: không dùng `String.count` trên tài liệu lớn; công việc nặng chạy trễ sau loạt phím (0,3 ms/phím ở 35 trang).
 12. `Note.uid` (UUID) cho link nội bộ `bnote://page/<uid>`; migration cho cùng một default cho mọi hàng cũ → `wireCommands` gán lại uid trùng.
-13. Log chẩn đoán Debug: `~/Library/Containers/com.hoangson.BNote/Data/Library/Application Support/bnote-input.log` (chỉ build Debug).
+13. **SwiftUI co màn hình rồi canh giữa**: `DashboardView` khi không có trang chỉ cao ~334pt, NavigationSplitView canh giữa theo chiều dọc → dải trắng lớn phía trên tiêu đề (bug 2026-09-22). Màn hình toàn khung phải tự `.frame(maxWidth: .infinity, maxHeight: .infinity)`; `ContentUnavailableView` **không** tự giãn. Harness `dash` canh chừng việc này.
+14. Log chẩn đoán Debug: `~/Library/Containers/com.hoangson.BNote/Data/Library/Application Support/bnote-input.log` (chỉ build Debug).
 
 ## 4. Kiểm thử
 
 Không GUI-test được (osascript không có Accessibility). Dùng harness headless compile thẳng bằng `swiftc`, dựng cửa sổ thật, bơm `NSEvent`:
 
 ```bash
-scripts/test.sh            # editor (~100) + keyboard (~90) + ui (~20) assertion
+scripts/test.sh            # editor (~110) + keyboard (~95) + ui (~25) assertion
+scripts/test.sh dash [n]   # Tổng quan với n trang phải lấp đầy cửa sổ (ảnh bnote-dash-n.png)
+scripts/test.sh perf       # đo độ trễ đầu trang khi bật Toàn chiều rộng (không assert)
 scripts/test.sh thesis     # sinh luận văn 35 trang vào store (thoát app trước)
 scripts/test.sh tree       # sinh cây kịch bản
 ```
@@ -64,7 +76,8 @@ Harness `ui` in ảnh `bnote-editor*.png`, `bnote-find.png` trong `$TMPDIR` đ�
 - UI tiếng Việt; commit message tiếng Việt, kết bằng `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`; email commit repo này `hoangson2758@gmail.com`.
 - Xcode project dùng synchronized group: thêm file vào `BNote/` là tự vào target, **không** sửa pbxproj. `Tests/` nằm ngoài target.
 - Build debug: `xcodebuild -project BNote.xcodeproj -scheme BNote -configuration Debug -derivedDataPath build build`; chạy: `open build/Build/Products/Debug/BNote.app`.
-- User hay gửi ảnh chụp và nói ngắn ("sai rồi", "lỗi đây"); ưu tiên tái hiện bằng harness trước khi sửa, và **relaunch/cập nhật bản cài** sau mỗi lần sửa vì họ test ngay.
+- User hay gửi ảnh chụp và nói ngắn ("sai rồi", "lỗi đây"); ưu tiên tái hiện bằng harness trước khi sửa, và **cập nhật bản Dev + mở lại** sau mỗi lần sửa vì họ test ngay.
+- Trước khi kết luận "mất dữ liệu", hỏi lại: có lần user tự xoá hết trang rồi báo "trang tổng quan bị lỗi".
 
 ## 6. Việc còn dở / ý tưởng kế tiếp
 

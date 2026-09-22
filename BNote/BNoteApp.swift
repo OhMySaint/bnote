@@ -10,7 +10,7 @@ struct BNoteApp: App {
     }
 
     var body: some Scene {
-        Window("BNote", id: "main") {
+        Window(AppFlavor.name, id: "main") {
             ContentView()
         }
         .modelContainer(for: [Note.self, Tag.self])

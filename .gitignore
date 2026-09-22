@@ -6,4 +6,5 @@ xcuserdata/
 *.xcscmblueprint
 *.xccheckout
 build-release/
+build-release-*/
 dist/
