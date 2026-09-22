@@ -211,7 +211,7 @@ check("toolbar báo Đầu mục 1 ngay khi chưa gõ", controller.format.style 
 tvPre.insertText("Da", replacementRange: tvPre.selectedRange()); pump()
 let typedFont = controller.textStorage.attribute(.font, at: controller.textStorage.length - 1, effectiveRange: nil) as? NSFont
 check("chữ gõ sau đó mang cỡ đầu mục", (typedFont?.pointSize ?? 0) >= 22, "size=\(typedFont?.pointSize ?? -1)")
-check("dòng cũ giữ nguyên cỡ thường", (controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == 13)
+check("dòng cũ giữ nguyên cỡ thường", (controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == EditorDefaults.fontSize)
 check("mục lục có 'Da'", controller.outline.map(\.text) == ["Da"], "got \(controller.outline.map(\.text))")
 
 print("== dòng trống ở giữa tài liệu ==")
@@ -225,7 +225,7 @@ tvMid.keyDown(with: key(36, "\r")); pump()
 tvMid.insertText("Giữa", replacementRange: tvMid.selectedRange()); pump()
 let midFont = controller.textStorage.attribute(.font, at: 6, effectiveRange: nil) as? NSFont
 check("đầu mục 2 áp cho dòng giữa", (midFont?.pointSize ?? 0) >= 18, "size=\(midFont?.pointSize ?? -1) text=\(controller.textStorage.string.debugDescription)")
-check("dòng 'dưới' không bị lây", (controller.textStorage.attribute(.font, at: controller.textStorage.length - 1, effectiveRange: nil) as? NSFont)?.pointSize == 13)
+check("dòng 'dưới' không bị lây", (controller.textStorage.attribute(.font, at: controller.textStorage.length - 1, effectiveRange: nil) as? NSFont)?.pointSize == EditorDefaults.fontSize)
 
 print("== / trên dòng trống chọn danh sách / trích dẫn ==")
 controller.load(data: nil, plainText: "x\n", config: PageConfig()); pump()
@@ -259,7 +259,7 @@ window.setContentSize(NSSize(width: 900, height: 800)); host.frame = window.cont
 check("không có magnification", abs(host.scrollView.magnification - 1) < 0.001)
 check("cửa sổ 900: mép 7,5% → cột 764 canh giữa", host.canvas.contentWidth == 764 && abs(host.canvas.contentLeading - 68) < 1, "w=\(host.canvas.contentWidth) x=\(host.canvas.contentLeading)")
 window.setContentSize(NSSize(width: 1800, height: 800)); host.frame = window.contentView!.bounds; host.layoutSubtreeIfNeeded(); pump()
-check("cửa sổ 1800: cột 1530 canh giữa", host.canvas.contentWidth == 1530 && abs(host.canvas.contentLeading - 135) < 1, "w=\(host.canvas.contentWidth) x=\(host.canvas.contentLeading)")
+check("cửa sổ 1800: cột chặn ở 900 và vẫn canh giữa", host.canvas.contentWidth == PagedDocumentView.Metrics.maximumColumn && abs(host.canvas.contentLeading - (1800 - 900) / 2) < 1, "w=\(host.canvas.contentWidth) x=\(host.canvas.contentLeading)")
 window.setContentSize(NSSize(width: 600, height: 800)); host.frame = window.contentView!.bounds; host.layoutSubtreeIfNeeded(); pump()
 check("cửa sổ hẹp 600: cột 510", host.canvas.contentWidth == 510, "w=\(host.canvas.contentWidth)")
 controller.canvasOptions.fullWidth = true; host.apply(options: controller.canvasOptions)
@@ -334,7 +334,7 @@ tvH.insertText("thân bài", replacementRange: tvH.selectedRange()); pump()
 let hFont = controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
 let bFont = controller.textStorage.attribute(.font, at: controller.textStorage.length - 1, effectiveRange: nil) as? NSFont
 check("dòng đầu vẫn là đầu mục", (hFont?.pointSize ?? 0) >= 22, "size=\(hFont?.pointSize ?? -1)")
-check("dòng sau Enter là văn bản thường", bFont?.pointSize == 13, "size=\(bFont?.pointSize ?? -1) text=\(controller.textStorage.string.debugDescription)")
+check("dòng sau Enter là văn bản thường", bFont?.pointSize == EditorDefaults.fontSize, "size=\(bFont?.pointSize ?? -1) text=\(controller.textStorage.string.debugDescription)")
 check("toolbar báo Văn bản", controller.format.style == .body, "got \(controller.format.style)")
 // Enter mid-heading keeps both halves as heading
 controller.load(data: nil, plainText: "Đầu mục dài", config: PageConfig()); pump()
@@ -372,9 +372,9 @@ tvMD = freshLine(); typeText(tvMD, "[] việc")
 check("'[] ' thành việc cần làm", controller.textStorage.string == "☐\tviệc", "got \(controller.textStorage.string.debugDescription)")
 tvMD = freshLine(); typeText(tvMD, "# Tiêu đề")
 let mdH = controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
-check("'# ' thành đầu mục 1", controller.textStorage.string == "Tiêu đề" && (mdH?.pointSize ?? 0) >= 22, "got \(controller.textStorage.string.debugDescription) size=\(mdH?.pointSize ?? -1)")
+check("'# ' thành đầu mục 1", controller.textStorage.string == "Tiêu đề" && (mdH?.pointSize ?? 0) == TextStyle.heading1.fontSize, "got \(controller.textStorage.string.debugDescription) size=\(mdH?.pointSize ?? -1)")
 tvMD = freshLine(); typeText(tvMD, "## Nhỏ")
-check("'## ' thành đầu mục 2", (controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == 19)
+check("'## ' thành đầu mục 2", (controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == TextStyle.heading2.fontSize)
 tvMD = freshLine(); typeText(tvMD, "> câu")
 check("'> ' thành trích dẫn", ((controller.textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)?.textBlocks.count ?? 0) == 1 && controller.textStorage.string == "câu")
 tvMD = freshLine(); typeText(tvMD, "``` let x")
@@ -391,7 +391,7 @@ tvMD.doCommand(by: #selector(NSResponder.deleteBackward(_:))); pump()
 tvMD.doCommand(by: #selector(NSResponder.deleteBackward(_:))); pump()
 check("xóa hết thì kiểu về Văn bản", controller.format.style == .body, "got \(controller.format.style)")
 typeText(tvMD, "x")
-check("chữ gõ tiếp là cỡ thường", (controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == 13)
+check("chữ gõ tiếp là cỡ thường", (controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == EditorDefaults.fontSize)
 // heading in the middle of a document
 controller.load(data: nil, plainText: "trên\nAb\ndưới", config: PageConfig()); pump()
 let tvMid2 = controller.activeTextView!; window.makeFirstResponder(tvMid2)
@@ -466,7 +466,7 @@ tvF.setSelectedRange(NSRange(location: 0, length: 3))
 if let light = faces.first(where: { $0.style.lowercased().contains("light") && !$0.style.lowercased().contains("italic") }) {
     controller.setFontFace(light.name)
     let f = controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
-    check("đổi sang Light giữ cỡ 13", f?.fontName == light.name && f?.pointSize == 13, "got \(f?.fontName ?? "nil") \(f?.pointSize ?? -1)")
+    check("đổi sang Light giữ cỡ chữ", f?.fontName == light.name && f?.pointSize == EditorDefaults.fontSize, "got \(f?.fontName ?? "nil") \(f?.pointSize ?? -1)")
     check("toolbar báo đúng kiểu", controller.format.fontName == light.name)
     controller.toggleTrait(.boldFontMask)
     let b = controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
@@ -495,6 +495,7 @@ host.apply(options: controller.canvasOptions)
 window.setContentSize(NSSize(width: 1000, height: 800)); host.frame = window.contentView!.bounds; host.layoutSubtreeIfNeeded(); pump()
 let colW = host.canvas.contentWidth
 check("mặc định: mép 7,5% (75pt) → cột 850", colW == 850 && abs(host.canvas.contentLeading - 75) < 1, "w=\(colW) x=\(host.canvas.contentLeading)")
+check("cột đọc không bao giờ vượt 900", colW <= PagedDocumentView.Metrics.maximumColumn)
 controller.canvasOptions.fullWidth = true; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()
 check("toàn rộng: mép 3% (30pt) → cột 940", host.canvas.contentWidth == 940, "w=\(host.canvas.contentWidth)")
 controller.canvasOptions.fullWidth = false; host.apply(options: controller.canvasOptions); host.layoutSubtreeIfNeeded(); pump()

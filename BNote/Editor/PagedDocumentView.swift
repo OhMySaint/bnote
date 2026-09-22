@@ -497,6 +497,9 @@ final class PagedDocumentView: NSView {
         static let readingGutterRatio: CGFloat = 0.075
         static let minimumGutter: CGFloat = 16
         static let minimumColumn: CGFloat = 320
+        /// Longest comfortable line. Without it a full-screen 27" window gives
+        /// 1700 pt lines that are painful to read (Notion caps its column too).
+        static let maximumColumn: CGFloat = 900
         static let columnTop: CGFloat = 8
         static let tailRoom: CGFloat = 240
     }
@@ -710,7 +713,10 @@ final class PagedDocumentView: NSView {
 
         let ratio = options.fullWidth ? Metrics.fullWidthGutterRatio : Metrics.readingGutterRatio
         let gutter = max(Metrics.minimumGutter, (windowWidth * ratio).rounded())
-        let columnVisual = max(Metrics.minimumColumn, windowWidth - gutter * 2)
+        var columnVisual = max(Metrics.minimumColumn, windowWidth - gutter * 2)
+        if !options.fullWidth {
+            columnVisual = min(columnVisual, Metrics.maximumColumn)
+        }
         let columnWidth = columnVisual.rounded()
 
         // Document width: the window, or the minimum column plus gutters.

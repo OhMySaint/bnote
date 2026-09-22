@@ -68,29 +68,51 @@ struct NoteEditorView: View {
     // MARK: - Status bar
 
     private var statusBar: some View {
-        HStack(spacing: 14) {
-            saveIndicator
-            Divider().frame(height: 11).opacity(0.5)
-            Text(controller.canvasOptions.continuous
-                ? "\(controller.wordCount) words · \(controller.characterCount) characters"
-                : "\(controller.pageCount) pages · \(controller.wordCount) words · \(controller.characterCount) characters")
-                .monospacedDigit()
-            Divider().frame(height: 11).opacity(0.5)
-            Text("\(controller.config.paper.label) \(controller.config.orientation.label.lowercased()) · \(Unit.format(controller.config.margins.left)) margins")
-
-            Spacer()
-
-            Text("Press / to insert a block")
-                .foregroundStyle(.quaternary)
-
-            Divider().frame(height: 11).opacity(0.5)
-            layoutToggles
+        // Narrow windows drop the wordy parts instead of clipping them.
+        ViewThatFits(in: .horizontal) {
+            statusBarContent(detail: .full)
+            statusBarContent(detail: .medium)
+            statusBarContent(detail: .compact)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .background(.bar)
+    }
+
+    private enum StatusDetail { case full, medium, compact }
+
+    private func statusBarContent(detail: StatusDetail) -> some View {
+        HStack(spacing: 14) {
+            saveIndicator
+            Divider().frame(height: 11).opacity(0.5)
+            Text(counts(detail: detail))
+                .monospacedDigit()
+            if detail == .full {
+                Divider().frame(height: 11).opacity(0.5)
+                Text("\(controller.config.paper.label) \(controller.config.orientation.label.lowercased()) · \(Unit.format(controller.config.margins.left)) margins")
+            }
+
+            Spacer(minLength: 8)
+
+            if detail == .full {
+                Text("Press / to insert a block")
+                    .foregroundStyle(.quaternary)
+                Divider().frame(height: 11).opacity(0.5)
+            }
+            layoutToggles(compact: detail == .compact)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func counts(detail: StatusDetail) -> String {
+        let pages = controller.canvasOptions.continuous ? "" : "\(controller.pageCount) pages · "
+        switch detail {
+        case .full: return pages + "\(controller.wordCount) words · \(controller.characterCount) characters"
+        case .medium: return pages + "\(controller.wordCount) words"
+        case .compact: return "\(controller.wordCount) w"
+        }
     }
 
     private var saveIndicator: some View {
@@ -104,9 +126,13 @@ struct NoteEditorView: View {
     }
 
     /// Notion's page option "Full width", as a switch.
-    private var layoutToggles: some View {
+    private func layoutToggles(compact: Bool) -> some View {
         Toggle(isOn: $controller.canvasOptions.fullWidth) {
-            Label("Full width", systemImage: "arrow.left.and.right")
+            if compact {
+                Image(systemName: "arrow.left.and.right")
+            } else {
+                Label("Full width", systemImage: "arrow.left.and.right")
+            }
         }
         .help("Full width: the text column stretches to both edges (⇧⌘\\)")
         .toggleStyle(.switch)

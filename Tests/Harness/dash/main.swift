@@ -50,5 +50,39 @@ if let cv = window.contentView, let rep = cv.bitmapImageRepForCachingDisplay(in:
         print("  ảnh: \(NSTemporaryDirectory())\(name)")
     }
 }
+// Sidebar: a page with children must show the selection tint like any other row.
+if howMany > 0 {
+    let notesForTree: [Note] = MainActor.assumeIsolated {
+        let parent = notes[0]
+        if notes.count > 1 { notes[1].parent = parent; notes[1].sortIndex = 1 }
+        parent.isExpanded = true
+        return (try? container.mainContext.fetch(FetchDescriptor<Note>())) ?? []
+    }
+    let roots = notesForTree.filter { $0.parent == nil }
+    let selected = MainActor.assumeIsolated { roots.first?.persistentModelID }
+    let sidebar = NavigationSplitView {
+        SidebarView(roots: roots, allNotes: notesForTree, tags: [], selection: .constant(selected),
+                    search: .constant(""), activeTag: .constant(nil), renamingID: .constant(nil),
+                    actions: actions, onManageTags: {}, onShowDashboard: {})
+    } detail: {
+        Color.clear
+    }
+    .modelContainer(container)
+    let sideWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+    sideWindow.contentView = NSHostingView(rootView: sidebar)
+    sideWindow.makeKeyAndOrderFront(nil)
+    pump(1.0)
+    sideWindow.contentView?.layoutSubtreeIfNeeded()
+    pump(0.5)
+    if let cv = sideWindow.contentView, let rep = cv.bitmapImageRepForCachingDisplay(in: cv.bounds) {
+        cv.cacheDisplay(in: cv.bounds, to: rep)
+        if let png = rep.representation(using: .png, properties: [:]) {
+            try? png.write(to: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("bnote-sidebar.png"))
+            print("  ảnh: \(NSTemporaryDirectory())bnote-sidebar.png")
+        }
+    }
+}
+
 print(failures.isEmpty ? "TẤT CẢ ĐỀU ĐẠT" : "THẤT BẠI (\(failures.count)): \(failures.joined(separator: " | "))")
 exit(failures.isEmpty ? 0 : 1)

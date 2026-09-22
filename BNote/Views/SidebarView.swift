@@ -23,6 +23,21 @@ struct SidebarView: View {
     var onManageTags: () -> Void
     var onShowDashboard: () -> Void
 
+    /// The tree as a flat list: every page whose ancestors are all expanded.
+    private var visibleRows: [(note: Note, depth: Int)] {
+        var rows: [(Note, Int)] = []
+        func walk(_ notes: [Note], depth: Int) {
+            for note in notes {
+                rows.append((note, depth))
+                if note.isExpanded, !note.sortedChildren.isEmpty {
+                    walk(note.sortedChildren, depth: depth + 1)
+                }
+            }
+        }
+        walk(roots, depth: 0)
+        return rows
+    }
+
     private var usedTagNames: [String] {
         var seen = Set<String>()
         return allNotes.flatMap(\.tags).filter { seen.insert(Tag.key(for: $0)).inserted }.sorted()
@@ -39,14 +54,19 @@ struct SidebarView: View {
                 }
 
                 Section("Pages") {
-                    ForEach(roots) { note in
+                    // Flattened on purpose: a DisclosureGroup label never shows
+                    // the List's selection tint, so a parent page looked
+                    // unselected. Rows carry their own chevron and indent.
+                    ForEach(visibleRows, id: \.note.persistentModelID) { row in
                         PageRow(
-                            note: note,
+                            note: row.note,
+                            depth: row.depth,
                             allNotes: allNotes,
                             tags: tags,
                             renamingID: $renamingID,
                             actions: actions
                         )
+                        .tag(row.note.persistentModelID)
                     }
                 }
 
@@ -179,6 +199,7 @@ struct PageContextMenu: View {
 
 private struct PageRow: View {
     let note: Note
+    var depth: Int = 0
     let allNotes: [Note]
     let tags: [Tag]
     @Binding var renamingID: PersistentIdentifier?
@@ -191,20 +212,11 @@ private struct PageRow: View {
     private var isRenaming: Bool { renamingID == note.persistentModelID }
 
     var body: some View {
-        Group {
-            if note.sortedChildren.isEmpty {
-                label
-            } else {
-                DisclosureGroup(isExpanded: expansion) {
-                    ForEach(note.sortedChildren) { child in
-                        PageRow(note: child, allNotes: allNotes, tags: tags, renamingID: $renamingID, actions: actions)
-                    }
-                } label: {
-                    label
-                }
-            }
+        HStack(spacing: 2) {
+            chevron
+            label
         }
-        .tag(note.persistentModelID)
+        .padding(.leading, CGFloat(depth) * 13)
         .contextMenu {
             PageContextMenu(note: note, allNotes: allNotes, actions: actions)
         }
@@ -216,8 +228,25 @@ private struct PageRow: View {
         }
     }
 
-    private var expansion: Binding<Bool> {
-        Binding(get: { note.isExpanded }, set: { note.isExpanded = $0 })
+    /// Twisty in the row itself, so the row stays a plain selectable List row.
+    @ViewBuilder
+    private var chevron: some View {
+        if note.sortedChildren.isEmpty {
+            Color.clear.frame(width: 13, height: 12)
+        } else {
+            Button {
+                note.isExpanded.toggle()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(note.isExpanded ? 90 : 0))
+                    .frame(width: 13, height: 12)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .animation(.easeOut(duration: 0.12), value: note.isExpanded)
+        }
     }
 
     @ViewBuilder

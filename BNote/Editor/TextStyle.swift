@@ -18,15 +18,16 @@ enum TextStyle: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Notion's scale: 16 px body, 30 / 24 / 20 headings, 40 for the title.
     var fontSize: CGFloat {
         switch self {
-        case .title: 30
-        case .heading1: 24
-        case .heading2: 19
-        case .heading3: 16
-        case .body: 13
-        case .caption: 11
-        case .code: 12.5
+        case .title: 40
+        case .heading1: 30
+        case .heading2: 24
+        case .heading3: 20
+        case .body: 16
+        case .caption: 14
+        case .code: 14.5
         }
     }
 
@@ -79,14 +80,14 @@ enum TextStyle: String, CaseIterable, Identifiable {
         guard let font else { return .body }
         let bold = NSFontManager.shared.traits(of: font).contains(.boldFontMask)
         let size = font.pointSize
-        if font.isFixedPitch && size <= 14 { return .code }
+        if font.isFixedPitch && size <= 16 { return .code }
         if bold {
-            if size >= 28 { return .title }
-            if size >= 22 { return .heading1 }
-            if size >= 18 { return .heading2 }
-            if size >= 15 { return .heading3 }
+            if size >= 36 { return .title }
+            if size >= 27 { return .heading1 }
+            if size >= 22 { return .heading2 }
+            if size >= 18 { return .heading3 }
         }
-        if size <= 11.5 { return .caption }
+        if size <= 14.5 { return .caption }
         return .body
     }
 }
@@ -121,9 +122,11 @@ enum Checkbox {
 
 enum EditorDefaults {
     static let fontFamily = "Helvetica Neue"
-    static let fontSize: CGFloat = 13
-    static let listIndent: CGFloat = 22
+    static let fontSize: CGFloat = 16
+    static let listIndent: CGFloat = 26
     static let tabIndent: CGFloat = 28
+    /// Notion reads at 1.5; anything tighter feels cramped at 16 px.
+    static let lineHeight: CGFloat = 1.5
 
     static var bodyFont: NSFont {
         NSFont(name: fontFamily, size: fontSize) ?? .systemFont(ofSize: fontSize)
@@ -131,6 +134,7 @@ enum EditorDefaults {
 
     static var bodyAttributes: [NSAttributedString.Key: Any] {
         let paragraph = NSMutableParagraphStyle()
+        paragraph.lineHeightMultiple = lineHeight
         paragraph.paragraphSpacing = TextStyle.body.spacingAfter
         return [
             .font: bodyFont,

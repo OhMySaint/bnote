@@ -1743,6 +1743,13 @@ extension DocumentController {
         return false
     }
 
+    #if DEBUG
+    func toggleCheckboxForTesting(paragraph: NSRange) {
+        let marker = (textStorage.string as NSString).substring(with: NSRange(location: paragraph.location, length: 1))
+        toggleCheckbox(paragraph: paragraph, isChecked: marker == String(Checkbox.checked))
+    }
+    #endif
+
     private func toggleCheckbox(paragraph: NSRange, isChecked: Bool) {
         guard let textView = activeTextView ?? layoutManager.firstTextView else { return }
         let replacement = String(isChecked ? Checkbox.unchecked : Checkbox.checked)

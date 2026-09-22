@@ -21,13 +21,15 @@ enum EditorMarkers {
 
     static func isMarker(_ character: Character) -> Bool { all.contains(character) }
 
-    /// Box the control glyph reserves, sized off the paragraph's font.
+    /// Box the control glyph reserves. Capped just short of the list tab stop:
+    /// a wider box would push the text past the stop to the next default tab,
+    /// which looked like the line jumping sideways on headings.
     static func width(for font: NSFont) -> CGFloat {
-        (font.pointSize * 1.15).rounded()
+        min((font.pointSize * 1.15).rounded(), EditorDefaults.listIndent - 6)
     }
 
     static func boxSide(for font: NSFont) -> CGFloat {
-        (font.pointSize * 1.06).rounded()
+        min((font.pointSize * 1.06).rounded(), width(for: font) - 2)
     }
 
     /// Draws one marker inside the rect the layout manager reserved for it.
