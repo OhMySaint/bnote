@@ -147,8 +147,10 @@ extension DocumentController {
     /// Scrolls the current match into view. The selection is left alone so the
     /// orange highlight is not covered by the inactive-selection grey.
     func revealCurrentMatch() {
-        guard let range = find.matches[safe: find.current], range.upperBound <= textStorage.length,
-              let textView = textView(containing: range.location) else { return }
+        guard let range = find.matches[safe: find.current], range.upperBound <= textStorage.length else { return }
+        // A hit inside a folded toggle is useless until the section opens.
+        expandToggles(containing: range.location)
+        guard let textView = textView(containing: range.location) else { return }
         textView.scrollRangeToVisible(range)
     }
 

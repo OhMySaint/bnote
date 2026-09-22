@@ -189,8 +189,39 @@ final class PageTextView: NSTextView {
     /// Shown on the first page while the document is empty.
     var placeholder: String?
 
+    /// Checkboxes and toggle arrows: the characters lay out as blank boxes
+    /// (see `EditorGlyphDelegate`), and the controls themselves are drawn here.
+    private func drawMarkers(in dirtyRect: NSRect) {
+        guard let layoutManager, let container = textContainer, let storage = textStorage, storage.length > 0 else { return }
+        let glyphRange = layoutManager.glyphRange(forBoundingRect: dirtyRect, in: container)
+        guard glyphRange.length > 0 else { return }
+        let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        let text = storage.string as NSString
+        let origin = textContainerOrigin
+
+        var location = charRange.location
+        while location < charRange.upperBound {
+            let paragraph = text.paragraphRange(for: NSRange(location: location, length: 0))
+            defer { location = max(paragraph.upperBound, location + 1) }
+            guard paragraph.location >= charRange.location || paragraph.upperBound > charRange.location,
+                  paragraph.location < storage.length,
+                  let marker = storage.string.character(atUTF16: paragraph.location),
+                  EditorMarkers.isMarker(marker),
+                  storage.attribute(.bnHidden, at: paragraph.location, effectiveRange: nil) == nil
+            else { continue }
+
+            let glyph = layoutManager.glyphIndexForCharacter(at: paragraph.location)
+            var rect = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+            rect.origin.x += origin.x
+            rect.origin.y += origin.y
+            let font = (storage.attribute(.font, at: paragraph.location, effectiveRange: nil) as? NSFont) ?? EditorDefaults.bodyFont
+            EditorMarkers.draw(marker, in: rect, font: font, checked: marker == Checkbox.checked)
+        }
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        drawMarkers(in: dirtyRect)
         if let rect = selectedPictureRect {
             NSColor.controlAccentColor.setStroke()
             let outline = NSBezierPath(rect: rect.insetBy(dx: -1, dy: -1))

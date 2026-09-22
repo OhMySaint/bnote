@@ -238,7 +238,7 @@ private struct PageCard: View {
                         .frame(height: 92)
                         .clipped()
                 } else {
-                    Color.primary.opacity(0.05)
+                    Color.primary.opacity(0.04)
                         .frame(height: 92)
                 }
                 Text(note.icon)
@@ -276,11 +276,10 @@ private struct PageCard: View {
             }
             .padding(10)
         }
-        .background(.background, in: .rect(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(hovering ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.08)))
-        .shadow(color: .black.opacity(hovering ? 0.12 : 0.05), radius: hovering ? 8 : 3, y: 2)
-        .scaleEffect(hovering ? 1.01 : 1)
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .background(.background, in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(hovering ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.07)))
+        .shadow(color: .black.opacity(hovering ? 0.10 : 0.04), radius: hovering ? 10 : 2, y: hovering ? 3 : 1)
+        .animation(.easeOut(duration: 0.14), value: hovering)
         .onHover { hovering = $0 }
     }
 }

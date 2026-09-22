@@ -72,9 +72,14 @@ final class DocumentController: NSObject, ObservableObject {
     /// A deletion just happened; an emptied heading line should fall back to body text.
     private var checkEmptyHeadingAfterEdit = false
     private var saveWork: DispatchWorkItem?
+    /// Draws checkboxes / toggle arrows and folds collapsed sections away.
+    private let glyphDelegate = EditorGlyphDelegate()
+    /// True while `.bnHidden` is being re-derived, so it cannot recurse.
+    var isFoldingUpdate = false
 
     override init() {
         super.init()
+        layoutManager.delegate = glyphDelegate
         textStorage.addLayoutManager(layoutManager)
         slashModel.onPick = { [weak self] command in
             self?.runSlashCommand(command)
@@ -112,6 +117,7 @@ final class DocumentController: NSObject, ObservableObject {
             container.textView?.typingAttributes = EditorDefaults.bodyAttributes
         }
         highlightAllCode()
+        refreshCollapsedRanges()
         closeSlashMenu()
         slashDismissedTrigger = nil
         self.config = config
@@ -171,6 +177,7 @@ final class DocumentController: NSObject, ObservableObject {
         if let caret = activeTextView?.selectedRange().location {
             highlightCode(around: max(0, caret - 1))
         }
+        refreshCollapsedRanges()
         documentView?.updatePagination()
         renumberLists()
         refreshDerivedState()
@@ -197,6 +204,7 @@ final class DocumentController: NSObject, ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
             guard let self else { return }
             derivedUpdateScheduled = false
+            refreshCollapsedRanges()
             documentView?.updatePagination()
             renumberLists()
             refreshDerivedState()
@@ -624,6 +632,9 @@ final class DocumentController: NSObject, ObservableObject {
         }
         if paragraph.hasPrefix("\(Checkbox.unchecked)\t") || paragraph.hasPrefix("\(Checkbox.checked)\t") {
             return (.todo, 2, 0)
+        }
+        if let first = paragraph.first, ToggleMarker.all.contains(first), paragraph.dropFirst().hasPrefix("\t") {
+            return (.toggle, 2, 0)
         }
         var digits = ""
         for character in paragraph {
@@ -1719,11 +1730,17 @@ extension DocumentController {
         guard paragraph.length >= 2 else { return false }
 
         let marker = string.substring(with: NSRange(location: paragraph.location, length: 1))
-        guard marker == String(Checkbox.unchecked) || marker == String(Checkbox.checked) else { return false }
         guard index <= paragraph.location + 1 else { return false }
 
-        toggleCheckbox(paragraph: paragraph, isChecked: marker == String(Checkbox.checked))
-        return true
+        if marker == String(Checkbox.unchecked) || marker == String(Checkbox.checked) {
+            toggleCheckbox(paragraph: paragraph, isChecked: marker == String(Checkbox.checked))
+            return true
+        }
+        if let first = marker.first, ToggleMarker.all.contains(first) {
+            toggleSection(at: paragraph)
+            return true
+        }
+        return false
     }
 
     private func toggleCheckbox(paragraph: NSRange, isChecked: Bool) {
@@ -1755,12 +1772,30 @@ extension DocumentController {
 
 // MARK: - NSTextViewDelegate
 
+// MARK: - Folding helpers
+
+private extension DocumentController {
+    /// A click or arrow key can land in folded text; the caret goes to the
+    /// toggle line instead, and typing never inherits the hidden flag.
+    private func skipHiddenText() {
+        guard let textView = activeTextView else { return }
+        textView.typingAttributes.removeValue(forKey: .bnHidden)
+        let selection = textView.selectedRange()
+        guard selection.length == 0, isHidden(at: selection.location) else { return }
+        var range = NSRange(location: 0, length: 0)
+        _ = textStorage.attribute(.bnHidden, at: selection.location, longestEffectiveRange: &range, in: NSRange(location: 0, length: textStorage.length))
+        textView.setSelectedRange(NSRange(location: max(0, range.location - 1), length: 0))
+    }
+
+}
+
 extension DocumentController: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         documentDidChangeFromTyping()
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
+        skipHiddenText()
         refreshFormatState()
         updateSlashMenu()
         updateMediaToolbar()
@@ -1911,6 +1946,31 @@ extension DocumentController: NSTextViewDelegate {
             textStorage.endEditing()
             textView.didChangeText()
             textView.typingAttributes[.paragraphStyle] = plain
+            documentDidChange()
+            return false
+        }
+
+        if info.kind == .toggle {
+            // Enter inside a toggle starts its content, nested one step in.
+            var child = attributes
+            child.removeValue(forKey: .bnHidden)
+            let style = (attributes[.paragraphStyle] as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle
+                ?? NSMutableParagraphStyle()
+            let indent = paragraphIndent(at: paragraph.location) + EditorDefaults.tabIndent
+            style.firstLineHeadIndent = indent
+            style.headIndent = indent
+            style.tabStops = []
+            child[.paragraphStyle] = style
+            // The same "\n" would re-enter this delegate method, so flag it.
+            isInsertingBreak = true
+            defer { isInsertingBreak = false }
+            guard textView.shouldChangeText(in: affectedCharRange, replacementString: "\n") else { return false }
+            textStorage.beginEditing()
+            textStorage.replaceCharacters(in: affectedCharRange, with: NSAttributedString(string: "\n", attributes: child))
+            textStorage.endEditing()
+            textView.didChangeText()
+            textView.setSelectedRange(NSRange(location: affectedCharRange.location + 1, length: 0))
+            textView.typingAttributes = child
             documentDidChange()
             return false
         }

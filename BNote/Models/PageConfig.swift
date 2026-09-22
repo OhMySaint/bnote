@@ -140,11 +140,14 @@ enum Unit {
 
     static var current: MeasurementUnit { Defaults.unit }
 
-    /// "0,75 in" / "1,91 cm" in the unit the user chose.
+    /// "0.75 in" / "1.91 cm" in the unit the user chose.
     static func format(_ points: CGFloat, unit: MeasurementUnit = current) -> String {
         let value = points / unit.points
-        let text = unit == .inch ? String(format: "%.2f", value) : String(format: "%.2f", value)
-        return "\(text.replacingOccurrences(of: ".", with: ",")) \(unit.label)"
+        // Trailing zeros off, decimal point (not comma) to match the English UI.
+        var text = String(format: "%.2f", value)
+        while text.contains("."), text.hasSuffix("0") { text.removeLast() }
+        if text.hasSuffix(".") { text.removeLast() }
+        return "\(text) \(unit.label)"
     }
 
     static func centimeters(_ points: CGFloat) -> String {

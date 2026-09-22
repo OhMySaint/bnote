@@ -16,29 +16,28 @@ struct FormatToolbar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ToolGroup { styleMenu }
-                ToolGroup {
-                    fontMenu
-                    faceMenu
-                    sizeControls
-                }
-                ToolGroup { traitButtons }
-                ToolGroup { colorControls }
-                ToolGroup { alignmentButtons }
-                ToolGroup {
-                    listButtons
-                    Divider().frame(height: 14)
-                    indentButtons
-                    lineSpacingMenu
-                }
-                ToolGroup { insertMenu }
+            HStack(spacing: 10) {
+                styleMenu
+                separator
+                fontMenu
+                faceMenu
+                sizeControls
+                separator
+                traitButtons
+                colorControls
+                separator
+                paragraphMenu
+                listButtons
+                indentButtons
+                separator
+                insertMenu
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
         }
-        .frame(height: 42)
+        .frame(height: 44)
         .background(.bar)
+        .overlay(alignment: .bottom) { Divider().opacity(0.6) }
         .onChange(of: controller.format.fontSize) { _, size in
             sizeText = size == size.rounded() ? "\(Int(size))" : String(format: "%.1f", size)
         }
@@ -145,7 +144,7 @@ struct FormatToolbar: View {
     }
 
     private var traitButtons: some View {
-        HStack(spacing: 1) {
+        HStack(spacing: 2) {
             ToolButton(icon: "bold", isOn: controller.format.bold, help: "Bold (⌘B)") {
                 controller.toggleTrait(.boldFontMask)
             }
@@ -188,25 +187,52 @@ struct FormatToolbar: View {
         }
     }
 
-    private var alignmentButtons: some View {
-        HStack(spacing: 1) {
-            ToolButton(icon: "text.alignleft", isOn: controller.format.alignment == .left, help: "Left (⇧⌘L)") {
-                controller.setAlignment(.left)
+    private var separator: some View {
+        Divider().frame(height: 18).opacity(0.5)
+    }
+
+    private static let alignments: [(NSTextAlignment, String, String)] = [
+        (.left, "text.alignleft", "Left (⇧⌘L)"),
+        (.center, "text.aligncenter", "Center (⇧⌘E)"),
+        (.right, "text.alignright", "Right (⇧⌘R)"),
+        (.justified, "text.justify", "Justify (⇧⌘J)"),
+    ]
+
+    /// Alignment and line spacing share one button showing the current state,
+    /// the way Pages does it — four separate buttons made the bar noisy.
+    private var paragraphMenu: some View {
+        let current = Self.alignments.first { $0.0 == controller.format.alignment } ?? Self.alignments[0]
+        return Menu {
+            ForEach(Self.alignments, id: \.1) { alignment, icon, label in
+                Button {
+                    controller.setAlignment(alignment)
+                } label: {
+                    Label(label, systemImage: icon)
+                    if controller.format.alignment == alignment { Image(systemName: "checkmark") }
+                }
             }
-            ToolButton(icon: "text.aligncenter", isOn: controller.format.alignment == .center, help: "Center (⇧⌘E)") {
-                controller.setAlignment(.center)
+            Divider()
+            Menu("Line spacing") {
+                ForEach([1.0, 1.15, 1.5, 2.0], id: \.self) { value in
+                    Button {
+                        controller.setLineHeight(CGFloat(value))
+                    } label: {
+                        Text(String(format: "%.2g", value))
+                        if abs(controller.format.lineHeight - value) < 0.01 { Image(systemName: "checkmark") }
+                    }
+                }
             }
-            ToolButton(icon: "text.alignright", isOn: controller.format.alignment == .right, help: "Right (⇧⌘R)") {
-                controller.setAlignment(.right)
-            }
-            ToolButton(icon: "text.justify", isOn: controller.format.alignment == .justified, help: "Justify (⇧⌘J)") {
-                controller.setAlignment(.justified)
-            }
+        } label: {
+            Image(systemName: current.1)
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Alignment and line spacing")
     }
 
     private var listButtons: some View {
-        HStack(spacing: 1) {
+        HStack(spacing: 2) {
             ToolButton(icon: "list.bullet", isOn: controller.format.list == .bullet, help: "Bulleted list (⇧⌘8)") {
                 controller.toggleList(.bullet)
             }
@@ -216,11 +242,14 @@ struct FormatToolbar: View {
             ToolButton(icon: "checklist", isOn: controller.format.list == .todo, help: "To-do list (⇧⌘9)") {
                 controller.toggleList(.todo)
             }
+            ToolButton(icon: "chevron.right.circle", isOn: controller.format.list == .toggle, help: "Toggle list") {
+                controller.toggleList(.toggle)
+            }
         }
     }
 
     private var indentButtons: some View {
-        HStack(spacing: 1) {
+        HStack(spacing: 2) {
             ToolButton(icon: "decrease.indent", isOn: false, help: "Decrease indent (⌘[)") {
                 controller.changeIndent(by: -EditorDefaults.tabIndent)
             }
@@ -228,25 +257,6 @@ struct FormatToolbar: View {
                 controller.changeIndent(by: EditorDefaults.tabIndent)
             }
         }
-    }
-
-    private var lineSpacingMenu: some View {
-        Menu {
-            ForEach([1.0, 1.15, 1.5, 2.0], id: \.self) { value in
-                Button {
-                    controller.setLineHeight(CGFloat(value))
-                } label: {
-                    Text(String(format: "%.2g", value))
-                    if abs(controller.format.lineHeight - value) < 0.01 { Image(systemName: "checkmark") }
-                }
-            }
-        } label: {
-            Image(systemName: "arrow.up.and.down.text.horizontal")
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Line spacing")
     }
 
     private var insertMenu: some View {
@@ -264,18 +274,6 @@ struct FormatToolbar: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("Insert a block — or press / in the page")
-    }
-}
-
-/// A cluster of related controls on a soft rounded backdrop.
-private struct ToolGroup<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        HStack(spacing: 2) { content() }
-            .padding(.horizontal, 5)
-            .frame(height: 28)
-            .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 7))
     }
 }
 
@@ -297,8 +295,8 @@ private struct ColorWell: View {
                     .fill(color.map { Color(nsColor: $0) } ?? Color.primary.opacity(0.35))
                     .frame(width: 14, height: 3)
             }
-            .frame(width: 24, height: 22)
-            .background(hovering ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 5))
+            .frame(width: 26, height: 24)
+            .background(hovering ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -317,10 +315,10 @@ private struct ToolButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 24, height: 22)
-                .foregroundStyle(isOn ? Color.accentColor : .primary)
-                .background(background, in: .rect(cornerRadius: 5))
+                .font(.system(size: 12.5, weight: .medium))
+                .frame(width: 26, height: 24)
+                .foregroundStyle(isOn ? Color.accentColor : .primary.opacity(0.85))
+                .background(background, in: .rect(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -328,7 +326,7 @@ private struct ToolButton: View {
     }
 
     private var background: Color {
-        if isOn { return Color.accentColor.opacity(0.18) }
+        if isOn { return Color.accentColor.opacity(0.15) }
         if hovering { return Color.primary.opacity(0.08) }
         return .clear
     }

@@ -348,7 +348,7 @@ check("Enter giữa đầu mục giữ nửa sau là đầu mục", (secondHalf?
 print("== mặc định 0,75 in ==")
 Defaults.register()
 check("lề mặc định 54pt = 0,75 in", Defaults.pageConfig.margins == PageMargins(uniform: 54))
-check("hiển thị 0,75 in", Unit.format(54) == "0,75 in", "got \(Unit.format(54))")
+check("hiển thị 0.75 in", Unit.format(54) == "0.75 in", "got \(Unit.format(54))")
 check("snap theo 1/8 in", Unit.snap(50) == 54, "got \(Unit.snap(50))")
 check("biên lề tắt, liên tục bật mặc định", !Defaults.canvasOptions.showMarginGuides && Defaults.canvasOptions.continuous)
 

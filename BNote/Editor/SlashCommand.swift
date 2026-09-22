@@ -46,6 +46,10 @@ enum SlashCatalog {
             symbol: "checklist", section: "Lists", keywords: ["viec can lam", "todo", "checkbox", "task", "cong viec"]
         ) { $0.toggleList(.todo) },
         SlashCommand(
+            id: "toggle", title: "Toggle list", subtitle: "A section that folds away under an arrow",
+            symbol: "chevron.right.circle", section: "Lists", keywords: ["toggle", "thu gon", "collapse", "fold", "section", "mui ten"]
+        ) { $0.toggleList(.toggle) },
+        SlashCommand(
             id: "quote", title: "Quote", subtitle: "A paragraph with a rule down its left side",
             symbol: "text.quote", section: "Blocks", keywords: ["trich dan", "quote", "blockquote"]
         ) { $0.insertQuote() },

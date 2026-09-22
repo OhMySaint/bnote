@@ -68,28 +68,28 @@ struct NoteEditorView: View {
     // MARK: - Status bar
 
     private var statusBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             saveIndicator
-            Divider().frame(height: 12)
+            Divider().frame(height: 11).opacity(0.5)
             Text(controller.canvasOptions.continuous
                 ? "\(controller.wordCount) words · \(controller.characterCount) characters"
                 : "\(controller.pageCount) pages · \(controller.wordCount) words · \(controller.characterCount) characters")
                 .monospacedDigit()
-            Divider().frame(height: 12)
+            Divider().frame(height: 11).opacity(0.5)
             Text("\(controller.config.paper.label) \(controller.config.orientation.label.lowercased()) · \(Unit.format(controller.config.margins.left)) margins")
 
             Spacer()
 
             Text("Press / to insert a block")
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.quaternary)
 
-            Divider().frame(height: 12)
+            Divider().frame(height: 11).opacity(0.5)
             layoutToggles
         }
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 16)
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
         .background(.bar)
     }
 

@@ -501,6 +501,60 @@ controller.hideFind()
 check("đóng thanh: xoá tô sáng", !controller.find.isVisible && controller.layoutManager.temporaryAttribute(.backgroundColor, atCharacterIndex: 0, effectiveRange: nil) == nil)
 check("đóng thanh: chọn kết quả hiện tại", controller.activeTextView?.selectedRange() == NSRange(location: 32, length: 3), "sel=\(String(describing: controller.activeTextView?.selectedRange()))")
 
+print("== toggle section: thu gọn thì dòng con biến mất khỏi layout ==")
+controller.canvasOptions = paperOptions
+controller.load(data: nil, plainText: "", config: PageConfig())
+canvas.updatePagination()
+let toggleTV = controller.activeTextView!
+// "▾ Section" + hai dòng con thụt lề + một dòng ngoài
+controller.insertPlainText("Section")
+controller.toggleList(.toggle)
+check("/toggle chèn mũi tên mở", controller.textStorage.string.hasPrefix("\(ToggleMarker.expanded)\tSection"), "text=\(controller.textStorage.string.prefix(12))")
+toggleTV.setSelectedRange(NSRange(location: controller.textStorage.length, length: 0))
+_ = controller.textView(toggleTV, shouldChangeTextIn: NSRange(location: controller.textStorage.length, length: 0), replacementString: "\n")
+controller.insertPlainText("child one")
+let childStart = controller.textStorage.string.range(of: "child one").map { controller.textStorage.string.distance(from: controller.textStorage.string.startIndex, to: $0.lowerBound) } ?? 0
+check("Enter trong toggle tạo dòng con thụt lề", controller.paragraphIndent(at: childStart) > 0, "indent=\(controller.paragraphIndent(at: childStart))")
+toggleTV.setSelectedRange(NSRange(location: controller.textStorage.length, length: 0))
+controller.insertPlainText("\nchild two")
+canvas.updatePagination()
+let openHeight = controller.layoutManager.usedRect(for: controller.layoutManager.textContainers[0]).height
+
+let togglePara = controller.paragraphRange(at: 0)
+controller.toggleSection(at: togglePara)
+canvas.updatePagination()
+check("thu gọn: mũi tên thành ▸", controller.textStorage.string.hasPrefix(String(ToggleMarker.collapsed)))
+check("thu gọn: dòng con bị đánh dấu ẩn", controller.isHidden(at: childStart))
+let closedHeight = controller.layoutManager.usedRect(for: controller.layoutManager.textContainers[0]).height
+check("thu gọn: layout thấp hẳn đi", closedHeight < openHeight - 10, "mở=\(openHeight) đóng=\(closedHeight)")
+check("thu gọn: chữ vẫn còn trong tài liệu", controller.textStorage.string.contains("child two"))
+
+controller.toggleSection(at: controller.paragraphRange(at: 0))
+canvas.updatePagination()
+check("mở lại: hết ẩn", !controller.isHidden(at: childStart))
+check("mở lại: layout cao như cũ", abs(controller.layoutManager.usedRect(for: controller.layoutManager.textContainers[0]).height - openHeight) < 1, "h=\(controller.layoutManager.usedRect(for: controller.layoutManager.textContainers[0]).height)")
+
+print("== toggle: tìm kiếm mở giúp phần đang thu gọn ==")
+controller.toggleSection(at: controller.paragraphRange(at: 0))
+controller.showFind()
+controller.find.query = "child two"; controller.findQueryChanged()
+check("tìm thấy chữ trong phần thu gọn", controller.find.matches.count == 1, "got \(controller.find.matches.count)")
+controller.revealCurrentMatch()
+check("nhảy tới kết quả thì toggle tự mở", !controller.isHidden(at: childStart))
+controller.hideFind()
+
+print("== checkbox: marker vẫn là ký tự, có ô vẽ riêng ==")
+controller.load(data: nil, plainText: "mua sữa", config: PageConfig())
+controller.toggleList(.todo)
+canvas.updatePagination()
+check("to-do bắt đầu bằng ☐", controller.textStorage.string.hasPrefix("\(Checkbox.unchecked)\t"))
+let markerFont = (controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont) ?? EditorDefaults.bodyFont
+let markerRect = controller.layoutManager.boundingRect(forGlyphRange: NSRange(location: controller.layoutManager.glyphIndexForCharacter(at: 0), length: 1), in: controller.layoutManager.textContainers[0])
+check("ô checkbox rộng đúng bằng hộp đã đặt", abs(markerRect.width - EditorMarkers.width(for: markerFont)) < 0.5, "w=\(markerRect.width) muốn=\(EditorMarkers.width(for: markerFont))")
+let clickPoint = NSPoint(x: markerRect.midX, y: markerRect.midY)
+_ = controller.handleCheckboxClick(at: clickPoint, in: canvas.pages[0].textView)
+check("bấm vào ô thì tích", controller.textStorage.string.hasPrefix("\(Checkbox.checked)\t"), "text=\(controller.textStorage.string.prefix(4))")
+
 if failures.isEmpty {
     print("TẤT CẢ ĐỀU ĐẠT")
 } else {

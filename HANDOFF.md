@@ -1,6 +1,6 @@
 # BNote — tài liệu bàn giao (đọc trước khi tiếp tục ở chat mới)
 
-Cập nhật: 2026-09-22. Người dùng: Hoàng Sơn (GitHub **OhMySaint**, gõ tiếng Việt bằng **OpenKey**).
+Cập nhật: 2026-09-23. Người dùng: Hoàng Sơn (GitHub **OhMySaint**, gõ tiếng Việt bằng **OpenKey**).
 
 ## 1. Dự án là gì, đang ở đâu
 
@@ -29,6 +29,9 @@ Cập nhật: 2026-09-22. Người dùng: Hoàng Sơn (GitHub **OhMySaint**, gõ
 | `Editor/SlashCommand.swift`, `SlashMenuPanel.swift` | Danh mục `/` và panel nổi (NSPanel **không được thành key**) |
 | `Editor/FindInPage.swift`, `Views/FindBar.swift` | Tìm/thay thế trong trang (⌘F, ⌥⌘F, ⌘G, ⇧⌘G, ⌘E): `FindModel` + extension controller; tô sáng bằng **temporary attributes** của layout manager (không đụng tài liệu); menu Tìm thay thế nhóm `.textEditing` của SwiftUI |
 | `Editor/CodeHighlighter.swift` | Tô màu mã regex; `NSTextBlock.isDecoration` |
+| `Editor/EditorGlyphs.swift` | `NSLayoutManagerDelegate` dùng chung: ký tự ☐ ☑ ▸ ▾ thành **control glyph** rỗng (tự vẽ trong `PageTextView.drawMarkers`), chữ mang `.bnHidden` sinh glyph `.null` nên biến mất khỏi layout |
+| `Editor/ToggleSections.swift` | Toggle kiểu Notion: mũi tên trong text là nguồn sự thật (▸ đóng / ▾ mở), `.bnHidden` được suy lại sau mỗi lần sửa (`refreshCollapsedRanges`), `expandToggles(containing:)` mở giúp khi ⌘F nhảy vào vùng đang gập |
+| `Models/StoreBackup.swift` | Chép `default.store` sang `Backups/<ngày>` trước khi mở store (giữ 5 bản, tối đa 6 giờ/lần) |
 | `Editor/MediaSupport.swift`, `MediaToolbar.swift` | YouTube/ảnh/link, cửa sổ xem trong app (WKWebView), thanh nổi khi chọn ảnh |
 | `Editor/AppActions.swift` | Cầu nối menu → ContentView (closure) |
 | `Views/ContentView.swift` | NavigationSplitView; sidebar / dashboard / editor; PageActions; export; link nội bộ |
@@ -54,8 +57,11 @@ Luồng lưu: gõ → `textDidChange` → `documentDidChangeFromTyping` (nhẹ) 
 10. Đơn vị: mặc định **inch**, lề 0,75 in; thước kẻ đã gỡ hẳn; đường biên lề/lưới chỉ ở chế độ giấy rời.
 11. Hiệu năng: không dùng `String.count` trên tài liệu lớn; công việc nặng chạy trễ sau loạt phím (0,3 ms/phím ở 35 trang).
 12. `Note.uid` (UUID) cho link nội bộ `bnote://page/<uid>`; migration cho cùng một default cho mọi hàng cũ → `wireCommands` gán lại uid trùng.
-13. **SwiftUI co màn hình rồi canh giữa**: `DashboardView` khi không có trang chỉ cao ~334pt, NavigationSplitView canh giữa theo chiều dọc → dải trắng lớn phía trên tiêu đề (bug 2026-09-22). Màn hình toàn khung phải tự `.frame(maxWidth: .infinity, maxHeight: .infinity)`; `ContentUnavailableView` **không** tự giãn. Harness `dash` canh chừng việc này.
-14. Log chẩn đoán Debug: `~/Library/Containers/com.hoangson.BNote/Data/Library/Application Support/bnote-input.log` (chỉ build Debug).
+13. **Giao diện tiếng Anh từ 2026-09-23**: chuỗi UI viết thẳng tiếng Anh (chưa dùng String Catalog). Nhãn trong harness vẫn tiếng Việt — đó là output cho dev, đừng dịch. Số đo format bằng dấu chấm (`Unit.format`).
+14. **Marker vẽ tay**: checkbox/toggle vẫn là **ký tự trong text** (☐ ☑ ▸ ▾ + tab) để plain-text, tìm kiếm và export không đổi; phần nhìn do `EditorMarkers` vẽ trong toạ độ **flipped** (+y hướng xuống — dấu tick từng bị vẽ ngược vì quên điều này).
+15. **Đệ quy delegate**: gọi `textView.shouldChangeText(in:replacementString:)` với đúng chuỗi `"\n"` bên trong `textView(_:shouldChangeTextIn:)` sẽ gọi lại chính nó → tràn stack. Đặt cờ `isInsertingBreak` trước khi gọi (nhánh Enter của toggle từng crash vì việc này).
+16. **SwiftUI co màn hình rồi canh giữa**: `DashboardView` khi không có trang chỉ cao ~334pt, NavigationSplitView canh giữa theo chiều dọc → dải trắng lớn phía trên tiêu đề (bug 2026-09-22). Màn hình toàn khung phải tự `.frame(maxWidth: .infinity, maxHeight: .infinity)`; `ContentUnavailableView` **không** tự giãn. Harness `dash` canh chừng việc này.
+17. Log chẩn đoán Debug: `~/Library/Containers/com.hoangson.BNote/Data/Library/Application Support/bnote-input.log` (chỉ build Debug).
 
 ## 4. Kiểm thử
 
@@ -64,6 +70,7 @@ Không GUI-test được (osascript không có Accessibility). Dùng harness hea
 ```bash
 scripts/test.sh            # editor (~110) + keyboard (~95) + ui (~25) assertion
 scripts/test.sh dash [n]   # Tổng quan với n trang phải lấp đầy cửa sổ (ảnh bnote-dash-n.png)
+scripts/test.sh marks      # ảnh checkbox + toggle (bnote-marks-open/closed.png), không assert
 scripts/test.sh perf       # đo độ trễ đầu trang khi bật Toàn chiều rộng (không assert)
 scripts/test.sh thesis     # sinh luận văn 35 trang vào store (thoát app trước)
 scripts/test.sh tree       # sinh cây kịch bản
@@ -84,5 +91,7 @@ Harness `ui` in ảnh `bnote-editor*.png`, `bnote-find.png` trong `$TMPDIR` đ�
 - Notarize khi có tài khoản Developer trả phí (nối vào `scripts/package.sh`).
 - Kéo thả sắp xếp trang trong sidebar; bảng có chỉnh cột; link preview cho web thường.
 - ⌘F đã xong (tìm/thay thế, Aa, Enter/⇧Enter, Esc chọn kết quả hiện tại). Chưa có: tìm không dấu, tìm toàn bộ workspace.
+- Toggle section đã xong (`/toggle`, bấm mũi tên, Enter tạo mục con, Tab đổi cấp, ⌘F tự mở). Chưa có: kéo thả nội dung vào toggle, và khi **xuất PDF/RTF** thì phần gập vẫn hiện đầy đủ kèm ký tự ▸/▾.
+- Checkbox vẽ tay (ô bo góc, tick trắng nền accent). Có thể làm thêm: hover đổi màu, animation khi tích.
 - Xuất PDF chưa vẽ nền khối mã (khối chỉ hiện trong layout của app).
 - Khi đổi tên trang qua menu chuột phải, ô sửa hiện tại chỗ (đã bỏ double-click vì làm hỏng click chọn).
