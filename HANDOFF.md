@@ -61,7 +61,8 @@ Luồng lưu: gõ → `textDidChange` → `documentDidChangeFromTyping` (nhẹ) 
 14. **Cỡ chữ theo Notion (2026-09-23)**: body 16, H1 30, H2 24, H3 20, Title 40, giãn dòng 1.5, `listIndent` 26. `TextStyle.detect` đã chỉnh ngưỡng theo scale mới — đổi cỡ thì phải sửa cả hai chỗ, nếu không kiểu chữ nhận diện sai sau khi nạp lại RTF.
 15. **"Nhảy chữ"**: hộp marker rộng hơn tab stop của danh sách thì chữ bị đẩy sang tab mặc định kế tiếp → dòng nhảy ngang (thấy rõ ở to-do cỡ heading). `EditorMarkers.width` bị chặn ở `listIndent - 6`, `boxSide` chặn theo `width`. Harness `marks` kiểm tra mọi dòng danh sách bắt đầu cùng một toạ độ.
 16. **Cột đọc chặn ở 900pt** (`Metrics.maximumColumn`) khi không bật Toàn chiều rộng, để full screen trên màn lớn không thành dòng 1700pt.
-17. **`DisclosureGroup` trong `List(selection:)` không hiện highlight ở hàng cha** → sidebar đổi sang danh sách phẳng (`visibleRows`), tự vẽ mũi tên, mỗi hàng là một row bình thường nên selection hiện đúng.
+17. **Sidebar tự vẽ selection** (`SidebarRow`): `DisclosureGroup` trong `List(selection:)` không hiện highlight ở hàng cha, còn selection của List thì xanh đậm và không có tag cho trạng thái "đang ở Overview". Nên bỏ hẳn `List(selection:)`: danh sách phẳng (`visibleRows`), mỗi hàng dùng `SidebarRow` — cùng lề trái (ô twisty 14pt luôn được giữ chỗ, icon rộng 16pt), cùng chiều cao một dòng, nền xám `primary.opacity(0.11)` khi chọn và `0.05` khi hover. **Đánh đổi:** không còn điều hướng bằng phím ↑/↓ trong sidebar; nếu làm lại thì phải tự xử lý `onMoveCommand`.
+    Kiểm chứng bằng `scripts/test.sh sidebar` → ảnh `bnote-sidebar-page.png` / `-overview.png`.
 18. **Marker vẽ tay**: checkbox/toggle vẫn là **ký tự trong text** (☐ ☑ ▸ ▾ + tab) để plain-text, tìm kiếm và export không đổi; phần nhìn do `EditorMarkers` vẽ trong toạ độ **flipped** (+y hướng xuống — dấu tick từng bị vẽ ngược vì quên điều này).
 19. **Đệ quy delegate**: gọi `textView.shouldChangeText(in:replacementString:)` với đúng chuỗi `"\n"` bên trong `textView(_:shouldChangeTextIn:)` sẽ gọi lại chính nó → tràn stack. Đặt cờ `isInsertingBreak` trước khi gọi (nhánh Enter của toggle từng crash vì việc này).
 20. **SwiftUI co màn hình rồi canh giữa**: `DashboardView` khi không có trang chỉ cao ~334pt, NavigationSplitView canh giữa theo chiều dọc → dải trắng lớn phía trên tiêu đề (bug 2026-09-22). Màn hình toàn khung phải tự `.frame(maxWidth: .infinity, maxHeight: .infinity)`; `ContentUnavailableView` **không** tự giãn. Harness `dash` canh chừng việc này.
@@ -75,6 +76,7 @@ Không GUI-test được (osascript không có Accessibility). Dùng harness hea
 scripts/test.sh            # editor (~110) + keyboard (~95) + ui (~25) assertion
 scripts/test.sh dash [n]   # Tổng quan với n trang phải lấp đầy cửa sổ (ảnh bnote-dash-n.png)
 scripts/test.sh marks      # marker không đè chữ + cột theo cửa sổ (ảnh bnote-marks.png)
+scripts/test.sh sidebar    # ảnh sidebar ở hai trạng thái chọn (canh lề, màu selection)
 scripts/test.sh perf       # đo độ trễ đầu trang khi bật Toàn chiều rộng (không assert)
 scripts/test.sh thesis     # sinh luận văn 35 trang vào store (thoát app trước)
 scripts/test.sh tree       # sinh cây kịch bản

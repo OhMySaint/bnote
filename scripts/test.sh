@@ -36,7 +36,8 @@ case "${1:-all}" in
   ui)         run ui "${UI[@]}" ;;
   perf)       run perf "${UI[@]}" ;;   # đo thời gian/độ trễ bật Toàn chiều rộng, không assert
   dash)       RUN_ARGS="${2:-0}" run dash "${UI[@]}" BNote/Views/DashboardView.swift BNote/Views/SidebarView.swift ;;
-  marks)      run marks "${CORE[@]}" ;;   # ảnh checkbox + toggle, không assert
+  marks)      run marks "${CORE[@]}" ;;
+  sidebar)    run sidebar "${UI[@]}" BNote/Views/SidebarView.swift BNote/Views/DashboardView.swift ;;   # ảnh checkbox + toggle, không assert
   thesis|screenplay|tree)
     echo "Ghi vào store của app — thoát BNote trước."; pkill -x BNote || true; sleep 1
     run "$1" BNote/AppFlavor.swift BNote/Models/*.swift BNote/Editor/*.swift BNote/Views/PageHeaderView.swift BNote/Views/CoverStyle.swift BNote/Views/TagViews.swift ;;

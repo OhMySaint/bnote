@@ -10,12 +10,45 @@ struct PageActions {
     var rename: (Note) -> Void
 }
 
-/// What the sidebar list can have selected. The dashboard needs a row of its
-/// own here, otherwise it cannot take part in the List's selection and has to
-/// paint a highlight by hand — which never matches the real one.
-enum SidebarItem: Hashable {
-    case overview
-    case page(PersistentIdentifier)
+/// Shared chrome for every sidebar row — Overview, pages, tag filters — so all
+/// of them share one left edge, one row height and one selected look.
+///
+/// The highlight is a quiet grey rather than the system's blue: the sidebar is
+/// a place to navigate from, not the focus of the window (Notion and Finder's
+/// unemphasised rows read the same way), and hand-painting it keeps every row
+/// identical whether or not the list has keyboard focus.
+struct SidebarRow<Content: View>: View {
+    var depth: Int = 0
+    var isSelected = false
+    var action: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    /// Width of the twisty column; rows without children still reserve it so
+    /// icons line up all the way down the sidebar.
+    static var twistyWidth: CGFloat { 14 }
+
+    @State private var hovering = false
+
+    var body: some View {
+        content()
+            .lineLimit(1)
+            .padding(.leading, 6 + CGFloat(depth) * 13)
+            .padding(.trailing, 6)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(background, in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(.rect)
+            .onTapGesture(perform: action)
+            .onHover { hovering = $0 }
+            .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+            .listRowSeparator(.hidden)
+    }
+
+    private var background: Color {
+        if isSelected { return Color.primary.opacity(0.11) }
+        if hovering { return Color.primary.opacity(0.05) }
+        return .clear
+    }
 }
 
 /// Nested page tree, the way Notion organises documents.
@@ -51,28 +84,21 @@ struct SidebarView: View {
         return allNotes.flatMap(\.tags).filter { seen.insert(Tag.key(for: $0)).inserted }.sorted()
     }
 
-    /// Bridges the page selection the rest of the app uses to the list, which
-    /// also has to represent "showing the dashboard".
-    private var listSelection: Binding<SidebarItem?> {
-        Binding(
-            get: { selection.map(SidebarItem.page) ?? .overview },
-            set: { item in
-                switch item {
-                case .page(let id): selection = id
-                case .overview, nil: onShowDashboard()
-                }
-            }
-        )
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            List(selection: listSelection) {
+            List {
                 Section {
-                    Label("Overview", systemImage: "square.grid.2x2")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                        .tag(SidebarItem.overview)
+                    SidebarRow(isSelected: selection == nil, action: onShowDashboard) {
+                        HStack(spacing: 6) {
+                            // Empty twisty slot: keeps this icon in the same
+                            // column as the page icons below.
+                            Color.clear.frame(width: SidebarRow<EmptyView>.twistyWidth, height: 12)
+                            Image(systemName: "square.grid.2x2")
+                                .frame(width: 16)
+                                .foregroundStyle(.secondary)
+                            Text("Overview")
+                        }
+                    }
                 }
 
                 Section("Pages") {
@@ -83,12 +109,13 @@ struct SidebarView: View {
                         PageRow(
                             note: row.note,
                             depth: row.depth,
+                            isSelected: selection == row.note.persistentModelID,
                             allNotes: allNotes,
                             tags: tags,
                             renamingID: $renamingID,
-                            actions: actions
+                            actions: actions,
+                            onSelect: { selection = row.note.persistentModelID }
                         )
-                        .tag(SidebarItem.page(row.note.persistentModelID))
                     }
                 }
 
@@ -96,21 +123,20 @@ struct SidebarView: View {
                     Section {
                         ForEach(usedTagNames, id: \.self) { name in
                             let isActive = activeTag.map { Tag.key(for: $0) == Tag.key(for: name) } ?? false
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(tags.color(for: name).color)
-                                    .frame(width: 8, height: 8)
-                                Text(name)
-                                Spacer()
-                                if isActive {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.tertiary)
+                            SidebarRow(isSelected: isActive, action: { activeTag = isActive ? nil : name }) {
+                                HStack(spacing: 6) {
+                                    Color.clear.frame(width: SidebarRow<EmptyView>.twistyWidth, height: 12)
+                                    Circle()
+                                        .fill(tags.color(for: name).color)
+                                        .frame(width: 8, height: 8)
+                                        .frame(width: 16)
+                                    Text(name)
+                                    Spacer(minLength: 4)
+                                    if isActive {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.tertiary)
+                                    }
                                 }
-                            }
-                            .foregroundStyle(isActive ? Color.accentColor : .primary)
-                            .contentShape(.rect)
-                            .onTapGesture {
-                                activeTag = isActive ? nil : name
                             }
                         }
                     } header: {
@@ -161,7 +187,7 @@ struct SidebarView: View {
             .buttonStyle(.borderless)
             .help("New page (⌘N)")
             Spacer()
-            Text("\(allNotes.count) trang")
+            Text("\(allNotes.count) \(allNotes.count == 1 ? "page" : "pages")")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -222,10 +248,12 @@ struct PageContextMenu: View {
 private struct PageRow: View {
     let note: Note
     var depth: Int = 0
+    var isSelected = false
     let allNotes: [Note]
     let tags: [Tag]
     @Binding var renamingID: PersistentIdentifier?
     let actions: PageActions
+    var onSelect: () -> Void = {}
 
     @State private var hovering = false
     @State private var draft = ""
@@ -234,11 +262,12 @@ private struct PageRow: View {
     private var isRenaming: Bool { renamingID == note.persistentModelID }
 
     var body: some View {
-        HStack(spacing: 2) {
-            chevron
-            label
+        SidebarRow(depth: depth, isSelected: isSelected, action: onSelect) {
+            HStack(spacing: 6) {
+                chevron
+                label
+            }
         }
-        .padding(.leading, CGFloat(depth) * 13)
         .contextMenu {
             PageContextMenu(note: note, allNotes: allNotes, actions: actions)
         }
@@ -254,7 +283,7 @@ private struct PageRow: View {
     @ViewBuilder
     private var chevron: some View {
         if note.sortedChildren.isEmpty {
-            Color.clear.frame(width: 13, height: 12)
+            Color.clear.frame(width: SidebarRow<EmptyView>.twistyWidth, height: 12)
         } else {
             Button {
                 note.isExpanded.toggle()
@@ -263,7 +292,7 @@ private struct PageRow: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(note.isExpanded ? 90 : 0))
-                    .frame(width: 13, height: 12)
+                    .frame(width: SidebarRow<EmptyView>.twistyWidth, height: 12)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -274,8 +303,9 @@ private struct PageRow: View {
     @ViewBuilder
     private var label: some View {
         if isRenaming {
-            HStack(spacing: 7) {
+            HStack(spacing: 6) {
                 Text(note.icon)
+                    .frame(width: 16)
                 TextField("Page title", text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .focused($renameFocused)
@@ -283,24 +313,22 @@ private struct PageRow: View {
                     .onExitCommand { renamingID = nil }
             }
         } else {
-            HStack(spacing: 7) {
+            HStack(spacing: 6) {
                 Text(note.icon)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(note.displayTitle)
-                        .lineLimit(1)
-                    if !note.tags.isEmpty {
-                        HStack(spacing: 3) {
-                            ForEach(note.tags.prefix(3), id: \.self) { tag in
-                                Circle()
-                                    .fill(tags.color(for: tag).color)
-                                    .frame(width: 6, height: 6)
-                            }
-                            Text(note.tags.joined(separator: " · "))
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
+                    .frame(width: 16)
+                Text(note.displayTitle)
+                    .lineLimit(1)
+                // Tags as plain dots: the row stays one line tall, so every row
+                // in the sidebar has the same height.
+                if !note.tags.isEmpty, !hovering {
+                    HStack(spacing: 3) {
+                        ForEach(note.tags.prefix(3), id: \.self) { tag in
+                            Circle()
+                                .fill(tags.color(for: tag).color)
+                                .frame(width: 6, height: 6)
                         }
                     }
+                    .help(note.tags.joined(separator: " · "))
                 }
                 Spacer(minLength: 4)
                 if hovering {
@@ -316,9 +344,7 @@ private struct PageRow: View {
                     .help("Add subpage")
                 }
             }
-            .padding(.vertical, 1)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(.rect)
             .onHover { hovering = $0 }
         }
     }
