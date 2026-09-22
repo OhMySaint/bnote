@@ -111,6 +111,50 @@ for style in [TextStyle.heading2, .heading3, .title, .body] {
           String(format: "baseline %.1f, chờ %.1f", baseline, font.ascender + before))
 }
 
+print("== chọn kiểu bằng menu / ==")
+controller.load(data: nil, plainText: "", config: PageConfig())
+pump(0.2)
+let slashTV = controller.activeTextView!
+window.makeFirstResponder(slashTV)
+for (id, style) in [("h1", TextStyle.heading1), ("h2", .heading2), ("quote", .body)] {
+    controller.load(data: nil, plainText: "", config: PageConfig())
+    pump(0.1)
+    slashTV.insertText("/", replacementRange: NSRange(location: NSNotFound, length: 0))
+    controller.updateSlashMenu()
+    guard let command = SlashCatalog.all.first(where: { $0.id == id }) else { continue }
+    controller.runSlashCommand(command)
+    pump(0.2)
+    let font = (slashTV.typingAttributes[.font] as? NSFont)
+    let paragraph = slashTV.typingAttributes[.paragraphStyle] as? NSParagraphStyle
+    let detected = TextStyle.detect(font: font, paragraph: paragraph)
+    if id != "quote" {
+        check("/\(id): giữ nguyên kiểu vừa chọn, không nảy về Text", detected == style,
+              "đang là \(detected.label), cỡ \(font?.pointSize ?? -1)")
+    }
+    // Typing right after must keep it too.
+    for character in "abc" { slashTV.insertText(String(character), replacementRange: NSRange(location: NSNotFound, length: 0)) }
+    pump(0.2)
+    let typed = controller.textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+    let typedStyle = TextStyle.detect(font: typed, paragraph: controller.textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+    if id != "quote" {
+        check("/\(id): gõ tiếp vẫn đúng kiểu", typedStyle == style, "đang là \(typedStyle.label), cỡ \(typed?.pointSize ?? -1)")
+    }
+    check("/\(id): chữ gõ ra đủ", controller.textStorage.string.hasSuffix("abc"), controller.textStorage.string.debugDescription)
+}
+
+print("== tài liệu cũ lưu bằng lineHeightMultiple được vá khi mở ==")
+let old = NSMutableAttributedString(string: "old paragraph")
+let oldStyle = NSMutableParagraphStyle()
+oldStyle.lineHeightMultiple = 1.5
+old.addAttributes([.font: EditorDefaults.bodyFont, .paragraphStyle: oldStyle], range: NSRange(location: 0, length: old.length))
+let archived = DocumentStorage.data(from: old)
+controller.load(data: archived, plainText: old.string, config: PageConfig())
+pump(0.2)
+let loaded = controller.textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+check("mở lên là hết lineHeightMultiple", (loaded?.lineHeightMultiple ?? 1) == 0, "multiple=\(loaded?.lineHeightMultiple ?? -1)")
+check("đổi thành lineSpacing tương đương", (loaded?.lineSpacing ?? 0) > 0, "spacing=\(loaded?.lineSpacing ?? -1)")
+checkLine("tài liệu cũ", at: 0)
+
 print("== khối mã và danh sách cũng vậy ==")
 controller.load(data: nil, plainText: "code line", config: PageConfig())
 controller.applyCodeBlock()

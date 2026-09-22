@@ -1234,7 +1234,12 @@ extension DocumentController {
             textView.setSelectedRange(NSRange(location: trigger, length: 0))
         }
 
+        // Deleting the typed "/..." is our own edit; without this the empty
+        // paragraph looks like a heading the user just cleared, and the style
+        // picked from the menu is thrown away again.
+        checkEmptyHeadingAfterEdit = false
         command.perform(self)
+        checkEmptyHeadingAfterEdit = false
         documentDidChange()
         refreshFormatState()
     }

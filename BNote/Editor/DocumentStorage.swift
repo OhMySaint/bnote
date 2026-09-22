@@ -64,6 +64,7 @@ enum DocumentStorage {
             if let archived {
                 let mutable = NSMutableAttributedString(attributedString: archived)
                 hydrateAttachments(in: mutable)
+                repairLineHeights(in: mutable)
                 return mutable
             }
             return nil
@@ -74,7 +75,26 @@ enum DocumentStorage {
         let mutable = NSMutableAttributedString(attributedString: legacy)
         repairLegacyFrames(in: mutable)
         hydrateAttachments(in: mutable)
+        repairLineHeights(in: mutable)
         return mutable
+    }
+
+    /// Pages written while line spacing was expressed as `lineHeightMultiple`
+    /// render with their glyphs sunk to the bottom of an inflated line, away
+    /// from the caret. Convert the multiple to plain spacing under the line.
+    static func repairLineHeights(in string: NSMutableAttributedString) {
+        let whole = NSRange(location: 0, length: string.length)
+        guard whole.length > 0 else { return }
+        string.enumerateAttribute(.paragraphStyle, in: whole) { value, range, _ in
+            guard let style = value as? NSParagraphStyle, style.lineHeightMultiple > 0,
+                  let mutable = style.mutableCopy() as? NSMutableParagraphStyle
+            else { return }
+            let size = (string.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)?.pointSize
+                ?? EditorDefaults.fontSize
+            mutable.lineSpacing = max(style.lineSpacing, ((style.lineHeightMultiple - 1.15) * size).rounded())
+            mutable.lineHeightMultiple = 0
+            string.addAttribute(.paragraphStyle, value: mutable, range: range)
+        }
     }
 
     /// Runtime code works with `attachment.image`; rebuild it from the stored bytes.
