@@ -10,6 +10,14 @@ struct PageActions {
     var rename: (Note) -> Void
 }
 
+/// What the sidebar list can have selected. The dashboard needs a row of its
+/// own here, otherwise it cannot take part in the List's selection and has to
+/// paint a highlight by hand — which never matches the real one.
+enum SidebarItem: Hashable {
+    case overview
+    case page(PersistentIdentifier)
+}
+
 /// Nested page tree, the way Notion organises documents.
 struct SidebarView: View {
     let roots: [Note]
@@ -43,23 +51,28 @@ struct SidebarView: View {
         return allNotes.flatMap(\.tags).filter { seen.insert(Tag.key(for: $0)).inserted }.sorted()
     }
 
+    /// Bridges the page selection the rest of the app uses to the list, which
+    /// also has to represent "showing the dashboard".
+    private var listSelection: Binding<SidebarItem?> {
+        Binding(
+            get: { selection.map(SidebarItem.page) ?? .overview },
+            set: { item in
+                switch item {
+                case .page(let id): selection = id
+                case .overview, nil: onShowDashboard()
+                }
+            }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            List(selection: $selection) {
+            List(selection: listSelection) {
                 Section {
-                    // The dashboard is "no page selected", which the List has no
-                    // tag for, so this row paints the selection itself.
-                    let showingOverview = selection == nil
                     Label("Overview", systemImage: "square.grid.2x2")
-                        .foregroundStyle(showingOverview ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
-                        .onTapGesture { onShowDashboard() }
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(showingOverview ? Color.accentColor : .clear)
-                                .padding(.horizontal, 6)
-                        )
+                        .tag(SidebarItem.overview)
                 }
 
                 Section("Pages") {
@@ -75,7 +88,7 @@ struct SidebarView: View {
                             renamingID: $renamingID,
                             actions: actions
                         )
-                        .tag(row.note.persistentModelID)
+                        .tag(SidebarItem.page(row.note.persistentModelID))
                     }
                 }
 
