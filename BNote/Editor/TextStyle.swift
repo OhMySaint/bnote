@@ -125,8 +125,14 @@ enum EditorDefaults {
     static let fontSize: CGFloat = 16
     static let listIndent: CGFloat = 26
     static let tabIndent: CGFloat = 28
-    /// Notion reads at 1.5; anything tighter feels cramped at 16 px.
-    static let lineHeight: CGFloat = 1.5
+    /// Notion reads at about 1.5. Added as space *below* each line rather than
+    /// as `lineHeightMultiple`: a multiple inflates the line box and drops the
+    /// glyphs to its bottom, so the text sits lower than the caret drawn beside it.
+    static let lineHeightRatio: CGFloat = 1.5
+
+    static func lineSpacing(for fontSize: CGFloat) -> CGFloat {
+        ((lineHeightRatio - 1.15) * fontSize).rounded()
+    }
 
     static var bodyFont: NSFont {
         NSFont(name: fontFamily, size: fontSize) ?? .systemFont(ofSize: fontSize)
@@ -134,7 +140,7 @@ enum EditorDefaults {
 
     static var bodyAttributes: [NSAttributedString.Key: Any] {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineHeightMultiple = lineHeight
+        paragraph.lineSpacing = lineSpacing(for: fontSize)
         paragraph.paragraphSpacing = TextStyle.body.spacingAfter
         return [
             .font: bodyFont,

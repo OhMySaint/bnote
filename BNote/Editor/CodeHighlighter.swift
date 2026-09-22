@@ -88,7 +88,7 @@ enum CodeHighlighter {
         style.textBlocks = [block]
         style.paragraphSpacing = 0
         style.paragraphSpacingBefore = 0
-        style.lineHeightMultiple = 1.15
+        style.lineSpacing = 2
         style.defaultTabInterval = 28
         style.tabStops = []
         return style

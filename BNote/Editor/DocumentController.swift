@@ -280,7 +280,12 @@ final class DocumentController: NSObject, ObservableObject {
 
         let paragraph = attributes[.paragraphStyle] as? NSParagraphStyle
         state.alignment = paragraph?.alignment ?? .left
-        state.lineHeight = paragraph?.lineHeightMultiple == 0 ? 1.0 : (paragraph?.lineHeightMultiple ?? 1.0)
+        if let multiple = paragraph?.lineHeightMultiple, multiple > 0 {
+            state.lineHeight = multiple           // documents written before the change
+        } else {
+            let spacing = paragraph?.lineSpacing ?? 0
+            state.lineHeight = ((1.15 + spacing / max(font.pointSize, 1)) * 100).rounded() / 100
+        }
         state.style = TextStyle.detect(font: font, paragraph: paragraph)
         state.list = currentListKind()
 
@@ -536,7 +541,13 @@ final class DocumentController: NSObject, ObservableObject {
     }
 
     func setLineHeight(_ multiple: CGFloat) {
-        updateParagraphs { $0.lineHeightMultiple = multiple }
+        // Stored as spacing under the line for the same reason as the default:
+        // a multiple would drop the glyphs away from the caret.
+        let size = format.fontSize
+        updateParagraphs {
+            $0.lineHeightMultiple = 0
+            $0.lineSpacing = max(0, (multiple - 1.15) * size)
+        }
     }
 
     func changeIndent(by delta: CGFloat) {
@@ -574,10 +585,13 @@ final class DocumentController: NSObject, ObservableObject {
             paragraph.headerLevel = style.headerLevel
             paragraph.paragraphSpacing = style.spacingAfter
             paragraph.paragraphSpacingBefore = style.spacingBefore
+            // Every style breathes the same way, so switching one never shifts
+            // the text inside its line.
+            paragraph.lineHeightMultiple = 0
+            paragraph.lineSpacing = EditorDefaults.lineSpacing(for: style.fontSize)
             // Picking a text style leaves a quote / callout / code frame; tables stay.
             if paragraph.textBlocks.first?.isDecoration ?? true {
                 paragraph.textBlocks = []
-                paragraph.lineHeightMultiple = 0
             }
             return paragraph
         }

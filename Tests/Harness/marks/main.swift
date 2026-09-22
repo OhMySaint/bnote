@@ -42,6 +42,7 @@ para("Bullet item", list: .bullet)
 para("Plain body paragraph at the new default size")
 para("Heading 1 sample", style: .heading1)
 para("Heading 2 sample", style: .heading2)
+para("Body text again, so line spacing is visible between two ordinary paragraphs that wrap onto more than one line in this column.")
 pump(0.3); host.layoutSubtreeIfNeeded(); pump(0.3)
 
 print("== marker không đẩy chữ đi chỗ khác ==")
