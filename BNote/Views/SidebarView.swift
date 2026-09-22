@@ -47,10 +47,19 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             List(selection: $selection) {
                 Section {
+                    // The dashboard is "no page selected", which the List has no
+                    // tag for, so this row paints the selection itself.
+                    let showingOverview = selection == nil
                     Label("Overview", systemImage: "square.grid.2x2")
+                        .foregroundStyle(showingOverview ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                         .onTapGesture { onShowDashboard() }
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(showingOverview ? Color.accentColor : .clear)
+                                .padding(.horizontal, 6)
+                        )
                 }
 
                 Section("Pages") {
